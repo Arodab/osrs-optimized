@@ -1,4 +1,13 @@
-# SpecScape
+# OSRS Optimized
+
+An OSRS combat tools project with two pages: SpecScape for comparing special attacks
+and Speedrun for simulating boss attack sequences and reset strategies. Each tool has
+its own URL under the same project.
+
+- [SpecScape](https://arodab.github.io/osrs-optimized/specscape/)
+- [Speedrun](https://arodab.github.io/osrs-optimized/speedrun/)
+
+## SpecScape
 
 Compare OSRS special attacks by the only thing that actually matters: **how much time
 each one saves you**.

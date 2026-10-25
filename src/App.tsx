@@ -35,6 +35,12 @@ import monstersData from '../public/data/monsters.json';
 import equipmentData from '../public/data/equipment.json';
 import spellsData from '../public/data/spells.json';
 
+type ToolPage = 'specscape' | 'speedrun';
+const projectBase = import.meta.env.BASE_URL.replace(/\/$/, '');
+const toolPath = (page: ToolPage) => `${projectBase}/${page}/`;
+const pageFromLocation = (): ToolPage =>
+  window.location.pathname.startsWith(`${projectBase}/speedrun`) ? 'speedrun' : 'specscape';
+
 const monsterLabel = (m: Monster) => (m.version ? `${m.name} (${m.version})` : m.name);
 const downloadJson = (name: string, data: unknown) => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
@@ -106,12 +112,33 @@ const defaultSpeedrunTab = (equipment: Equip[]): LoadoutTab => {
 };
 
 export default function App() {
-  const [activePage, setActivePage] = useState<'specscape' | 'speedrun'>('specscape');
+  const [activePage, setActivePage] = useState<ToolPage>(pageFromLocation);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [equipment, setEquipment] = useState<Equip[]>([]);
   const [spells, setSpells] = useState<Spell[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const navigatePage = useCallback((page: ToolPage) => {
+    if (window.location.pathname !== toolPath(page)) window.history.pushState(null, '', toolPath(page));
+    setActivePage(page);
+  }, []);
+
+  useEffect(() => {
+    const normalizeRoute = () => {
+      const page = pageFromLocation();
+      if (window.location.pathname !== toolPath(page)) window.history.replaceState(null, '', toolPath(page));
+      setActivePage(page);
+    };
+    const onPopState = () => setActivePage(pageFromLocation());
+    normalizeRoute();
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    document.title = `${activePage === 'speedrun' ? 'Speedrun' : 'SpecScape'} · OSRS Optimized`;
+  }, [activePage]);
 
   const [encounters, setEncounters] = useState<EncounterDef[]>([{ id: crypto.randomUUID(), monsterId: DEFAULT_MONSTER, styleTab: 'melee', count: 1, downtimeSeconds: 0 }]);
   const loadPreset = (preset: 'toa' | 'tob' | 'cox') => {
@@ -949,7 +976,7 @@ export default function App() {
   return (
     <div className={`app-shell ${navCollapsed ? 'nav-collapsed' : ''}`}>
       <aside className="site-sidebar" aria-label="Site pages">
-        <div className="sidebar-brand"><span className="sidebar-mark">S</span><span className="sidebar-brand-name">SpecScape</span></div>
+        <div className="sidebar-brand"><span className="sidebar-mark">O</span><span className="sidebar-brand-name">OSRS Optimized</span></div>
         <button
           className="sidebar-collapse"
           type="button"
@@ -965,7 +992,7 @@ export default function App() {
             className={`page-nav-item ${activePage === 'specscape' ? 'active' : ''}`}
             aria-current={activePage === 'specscape' ? 'page' : undefined}
             title="SpecScape"
-            onClick={() => setActivePage('specscape')}
+            onClick={() => navigatePage('specscape')}
           >
             <span className="page-nav-icon">⚔</span><span className="page-nav-label">SpecScape</span>
           </button>
@@ -974,7 +1001,7 @@ export default function App() {
             className={`page-nav-item ${activePage === 'speedrun' ? 'active' : ''}`}
             aria-current={activePage === 'speedrun' ? 'page' : undefined}
             title="Speedrun"
-            onClick={() => setActivePage('speedrun')}
+            onClick={() => navigatePage('speedrun')}
           >
             <span className="page-nav-icon">◷</span><span className="page-nav-label">Speedrun</span>
           </button>
@@ -984,7 +1011,7 @@ export default function App() {
       <div className="app">
       <header className="top-bar">
         <div className="header-text">
-          <h1>Spec<span>Scape</span></h1>
+          <h1>{activePage === 'speedrun' ? 'Speedrun' : 'SpecScape'}</h1>
           
         </div>
         <div className="saved-setups-compact">
@@ -1059,7 +1086,7 @@ export default function App() {
                   {POTIONS.map((potion) => <option key={potion.id} value={potion.id}>{potion.label}</option>)}
                 </select>
               </label>
-              <button type="button" className="mini" onClick={() => setActivePage('specscape')}>Edit boss in SpecScape</button>
+              <button type="button" className="mini" onClick={() => navigatePage('specscape')}>Edit boss in SpecScape</button>
             </div>
           </div>
         </section>
