@@ -9,6 +9,7 @@ import type { SequenceAttack, SequenceResult } from '../sim/sequence';
 import type { SpecDef } from '../sim/specs';
 import { gearToRefs, refsToGear, type ItemRef } from './setups';
 import { simulateSequence } from '../sim/sequence';
+import { accuracy } from '../sim/combat';
 
 export interface SequenceSetup {
   gear: GearSet;
@@ -27,7 +28,7 @@ interface Props {
   baseSetup: SequenceSetup;
   combatLevels: CombatLevels;
   itemsBySlot: Map<Slot, Equip[]>; equipment: Equip[]; specs: SpecAttack[];
-  specOptions: Record<string, boolean>; startEnergy: number; lightbearer: boolean;
+  specOptions: Record<string, boolean>; lightbearer: boolean;
   buildAttack: (setup: SequenceSetup, useSpec: boolean) => SequenceAttack | null;
   makePreset: (id: string) => SequenceSetup;
 }
@@ -37,6 +38,7 @@ interface StoredGroup extends Omit<AttackGroup, 'setup'> {
 interface SavedStrategy {
   groups: StoredGroup[]; trials: number; targetSeconds: number;
   killOverheadSeconds: number; resetSeconds: number;
+  startEnergy: number; ticksUntilRegen: number; useSurgePotion: boolean;
 }
 interface LoadedStrategy extends Partial<Omit<SavedStrategy, 'groups'>> { groups?: AttackGroup[] }
 const STORAGE_KEY = 'specscape.speedrun.strategy.v1';
@@ -70,9 +72,12 @@ const readStrategy = (equipment: Equip[]): LoadedStrategy | null => {
 };
 
 export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevels, itemsBySlot, equipment, specs,
-  specOptions, startEnergy, lightbearer, buildAttack, makePreset }: Props) {
+  specOptions, lightbearer, buildAttack, makePreset }: Props) {
   const [groups, setGroups] = useState<AttackGroup[]>([]);
   const [trials, setTrials] = useState(20000);
+  const [startEnergy, setStartEnergy] = useState(95);
+  const [ticksUntilRegen, setTicksUntilRegen] = useState(1);
+  const [useSurgePotion, setUseSurgePotion] = useState(true);
   const [targetSeconds, setTargetSeconds] = useState(0);
   const [killOverheadSeconds, setKillOverheadSeconds] = useState(0);
   const [resetSeconds, setResetSeconds] = useState(10);
@@ -113,6 +118,9 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
       setTargetSeconds(saved.targetSeconds ?? 0);
       setKillOverheadSeconds(saved.killOverheadSeconds ?? 0);
       setResetSeconds(saved.resetSeconds ?? 10);
+      setStartEnergy(saved.startEnergy ?? 95);
+      setTicksUntilRegen(saved.ticksUntilRegen ?? 1);
+      setUseSurgePotion(saved.useSurgePotion ?? true);
     }
     initialized.current = true;
   }, [equipment, makePreset]);
@@ -122,10 +130,10 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
     try {
       const strategy: SavedStrategy = { groups: groups.map((group) => ({ ...group,
         setup: group.setup ? { ...group.setup, gear: gearToRefs(group.setup.gear) } : null,
-      })), trials, targetSeconds, killOverheadSeconds, resetSeconds };
+      })), trials, targetSeconds, killOverheadSeconds, resetSeconds, startEnergy, ticksUntilRegen, useSurgePotion };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(strategy));
     } catch { /* browser storage is optional */ }
-  }, [groups, trials, targetSeconds, killOverheadSeconds, resetSeconds]);
+  }, [groups, trials, targetSeconds, killOverheadSeconds, resetSeconds, startEnergy, ticksUntilRegen, useSurgePotion]);
 
   const resolved: SequenceAttack[] = [];
   let generatedIndex = 0;
@@ -154,7 +162,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
     if (!monster || !resolved.length || running) return;
     setRunning(true);
     window.setTimeout(() => {
-      setResult(simulateSequence({ monster, actions: resolved, trials, startEnergy, lightbearer, specOptions,
+      setResult(simulateSequence({ monster, actions: resolved, trials, startEnergy, ticksUntilRegen, lightbearer, useSurgePotion, specOptions,
         targetSeconds, downtimeSeconds: killOverheadSeconds, resetSeconds })); setRunning(false);
     }, 0);
   };
@@ -197,10 +205,18 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
           : 0;
         const zulrahCapApplies = monster?.name === 'Zulrah' && displayedMaxHit > 50;
         const isTomeSpec = group.useSpec && weaponSpec?.def.id === 'zorya_tome';
-        const maxHitSummary = isTomeSpec
+        const isCrystalHalberdSpec = group.useSpec && weaponSpec?.def.id === 'crystal_halberd';
+        const hitSplats = isCrystalHalberdSpec && monster && monster.size > 1 ? 2 : 1;
+        const hitAccuracy = attack && monster
+          ? attack.spec?.guaranteed ? 1 : accuracy(attack.load, monster, {
+            hp: monster.hp, def: monster.def, magic: monster.magic, baseDef: monster.def, baseAtk: 0, baseStr: 0,
+          }, attack.spec ? { styleOverride: attack.spec.defStyle, accuracyMultiplier: attack.spec.accMult } : {})
+          : null;
+        const perHitMax = zulrahCapApplies ? 50 : displayedMaxHit;
+        const maxHitSummary = hitSplats > 1
           ? zulrahCapApplies
-            ? `50 (uncapped max ${displayedMaxHit}) × 4 = 200`
-            : `${displayedMaxHit} × 4 = ${displayedMaxHit * 4} max`
+            ? `${perHitMax} (uncapped max ${displayedMaxHit}) × ${hitSplats} = ${perHitMax * hitSplats}`
+            : `${displayedMaxHit} × ${hitSplats} = ${displayedMaxHit * hitSplats} max`
           : zulrahCapApplies ? `50 (uncapped max ${displayedMaxHit})` : `${displayedMaxHit} max`;
         const customItems = new Map(itemsBySlot); customItems.set('ammo', ammoFor(gear.weapon, itemsBySlot.get('ammo') ?? []));
         const drag = { index };
@@ -218,7 +234,8 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
                 onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} /><span>Use spec</span></label>
               {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
               <span className="sequence-detail">
-                {maxHitSummary} · {isTomeSpec ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}
+                <span>{maxHitSummary} · {isTomeSpec ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}</span>
+                <small>Accuracy {hitAccuracy === null ? '—' : chance(hitAccuracy)}{hitSplats > 1 ? ' each hitsplat' : ''}</small>
               </span>
             </div>
             <div className="sequence-action-buttons">
@@ -254,20 +271,23 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
 
     <div className="sequence-controls">
       <label><span>Trials</span><select value={trials} onChange={(event) => setTrials(Number(event.target.value))}><option value={5000}>5,000</option><option value={20000}>20,000</option><option value={100000}>100,000</option></select></label>
+      <label><span>Starting spec energy (%)</span><input type="number" min={0} max={100} step={5} value={startEnergy} onChange={(event) => setStartEnergy(Math.max(0, Math.min(100, Number(event.target.value) || 0)))} /></label>
+      <label><span>Ticks until next regen</span><input type="number" min={1} max={50} value={ticksUntilRegen} onChange={(event) => setTicksUntilRegen(Math.max(1, Math.min(50, Math.floor(Number(event.target.value) || 1))))} /></label>
+      <label className="sequence-surge-toggle"><input type="checkbox" checked={useSurgePotion} onChange={(event) => setUseSurgePotion(event.target.checked)} /><span>Use Surge potion (+25%)</span></label>
       <label><span>Record target (seconds, optional)</span><input type="number" min={0} max={600} step={.1} value={targetSeconds} onChange={(event) => setTargetSeconds(Math.max(0, Number(event.target.value) || 0))} /></label>
       <label><span title="Time added for phase transitions, death animation, etc.">Kill overhead (seconds)</span><input type="number" min={0} max={600} step={.1} value={killOverheadSeconds} onChange={(event) => setKillOverheadSeconds(Math.max(0, Number(event.target.value) || 0))} /></label>
       <label><span title="Time spent resetting before retrying">Reset time (seconds)</span><input type="number" min={0} max={600} step={.1} value={resetSeconds} onChange={(event) => setResetSeconds(Math.max(0, Number(event.target.value) || 0))} /></label>
       <button className="primary sequence-run" disabled={!monster || !resolved.length || running} onClick={run}>{running ? 'Simulating…' : 'Simulate sequence'}</button>
     </div>
     {result && <div className="sequence-results">
-      <div className="sequence-result-primary"><span>Kill chance per attempt</span><strong>{chance(result.killChance)}</strong><small>{result.kills.toLocaleString()} / {result.trials.toLocaleString()} trials</small></div>
-      <div className="sequence-result-primary"><span>Best reset point</span><strong>{result.optimalResetAfterAttack === null ? 'None' : `After attack ${result.optimalResetAfterAttack}`}</strong><small>{result.expectedKillSeconds === null ? 'No kills observed at any cutoff' : `${result.expectedKillSeconds.toFixed(2)}s expected per kill with retries`}</small></div>
+      <div className="sequence-result-primary"><span>Kill chance per attempt</span><strong>{chance(result.killChance)}</strong><small>{result.kills.toLocaleString()} / {result.trials.toLocaleString()} trials{result.kills === 0 ? ` · no sampled kills; rates below ${(100 / result.trials).toPrecision(2)}% may not appear at this sample size` : ''}</small></div>
+      <div className="sequence-result-primary"><span>Best reset point</span><strong>{result.optimalResetAfterAttack === null ? 'None' : `After attack ${result.optimalResetAfterAttack}`}</strong><small>{result.expectedKillSeconds === null ? 'No kills observed in this sample; chance may be very low' : `${result.expectedKillSeconds.toFixed(2)}s expected per kill with retries`}</small></div>
       {result.targetChance !== null && <div className="sequence-result-primary"><span>At or under {result.targetSeconds.toFixed(1)}s</span><strong>{chance(result.targetChance)}</strong><small>single-attempt kill chance</small></div>}
-      <div><span>Sequence length if Tome specs hit</span><b>{result.sequenceTicks} ticks · {(result.sequenceTicks * .6).toFixed(2)}s</b><small>includes the 2-tick empowered Tome attacks and configured pauses</small></div>
+      <div><span>Attack sequence length</span><b>{result.sequenceTicks} ticks · {(result.sequenceTicks * .6).toFixed(2)}s</b><small>assumes Tome specs hit; Surge can add 2 ticks when used</small></div>
       <div><span>Mean / median kill time</span><b>{result.meanKillTicks === null ? 'No kills' : `${(result.meanKillTicks * .6 + result.downtimeSeconds).toFixed(2)}s / ${((result.medianKillTicks ?? 0) * .6 + result.downtimeSeconds).toFixed(2)}s`}</b><small>successful attempts including kill overhead</small></div>
       <div className="sequence-reset-options"><span>Reset strategy comparison</span>{result.resetOptions.map((option) => <small key={option.afterAttack}>After {option.afterAttack}: {chance(option.chance)} · {option.expectedSeconds === null ? 'no sampled kills' : `${option.expectedSeconds.toFixed(2)}s expected`}</small>)}</div>
       {result.mathematicallyImpossible && <p className="warn sequence-caveat">This sequence is mathematically unable to deal enough maximum damage to defeat this boss, even if every hit reaches its maximum.</p>}
-      <p className="help-text sequence-caveat">The reset estimate assumes each retry starts with the same spec energy. Damage and accuracy are simulated; pauses between attacks, kill overhead, and reset time are included. Boss phases, weapon procs, movement, and incoming damage are not modeled.</p>
+      <p className="help-text sequence-caveat">Each attempt starts with the selected spec energy and can use one Surge potion. Natural special energy regeneration and Lightbearer are simulated during attack ticks and pauses; an unaffordable spec toggle falls back to a regular attack. Boss phases, weapon procs, movement, and incoming damage are not modeled.</p>
     </div>}
   </section>;
 }

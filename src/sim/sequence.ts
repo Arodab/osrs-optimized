@@ -44,23 +44,39 @@ const applyDamageCap = (damage: number, monster: Monster, rng: () => number): nu
 /** Run one attempt, stopping at the chosen reset point if the boss survives. */
 const attempt = (args: {
   monster: Monster; actions: SequenceAttack[]; cutoff: number; rng: () => number;
-  startEnergy: number; lightbearer: boolean; specOptions: Record<string, boolean>;
+  startEnergy: number; ticksUntilRegen: number; lightbearer: boolean; useSurgePotion: boolean; specOptions: Record<string, boolean>;
 }): { killed: boolean; ticks: number } => {
   const { monster, actions, cutoff, rng } = args;
   const state = freshState(monster);
   let energy = args.startEnergy;
-  let regenCounter = args.lightbearer ? 25 : 50;
+  const regenInterval = args.lightbearer ? 25 : 50;
+  let regenCounter = Math.max(1, Math.min(regenInterval, args.ticksUntilRegen));
   let elapsed = 0;
   let zoryaEmpoweredAttacks = 0;
+  let surgePotionAvailable = args.useSurgePotion;
+  const advanceTicks = (ticks: number) => {
+    for (let tick = 0; tick < ticks; tick++) {
+      elapsed++;
+      if (energy < 100 && --regenCounter <= 0) {
+        energy = Math.min(100, energy + 10);
+        regenCounter = args.lightbearer ? 25 : 50;
+      }
+    }
+  };
   for (let i = 0; i < Math.min(cutoff, actions.length); i++) {
     const action = actions[i];
     const spec = action.spec;
-    if (spec && energy < spec.cost) break;
-    if (spec) energy -= spec.cost;
+    if (spec && energy < spec.cost && surgePotionAvailable && energy < 100) {
+      energy = Math.min(100, energy + 25);
+      surgePotionAvailable = false;
+      advanceTicks(2); // Drinking a dose costs two ticks.
+    }
+    const useSpec = !!spec && energy >= spec.cost;
+    if (useSpec) energy -= spec!.cost;
     const zoryaEmpowered = zoryaEmpoweredAttacks > 0 && action.weaponName === "Zorya's tome";
     if (zoryaEmpowered) zoryaEmpoweredAttacks--;
     const attackSpeed = zoryaEmpowered ? 2 : action.load.speed;
-    if (!spec) {
+    if (!useSpec) {
       const hitLoad = zoryaEmpowered ? { ...action.load, maxHit: Math.floor(action.load.maxHit * 1.6) } : action.load;
       if (rng() < accuracy(hitLoad, monster, state, zoryaEmpowered ? { accuracyMultiplier: 2.5 } : {})) {
         const damage = applyDamageCap(randInt(rng, 0, hitLoad.maxHit), monster, rng);
@@ -68,32 +84,19 @@ const attempt = (args: {
       }
     } else {
       let specHit = false;
-      const acc = spec.guaranteed ? 1 : accuracy(action.load, monster, state, { styleOverride: spec.defStyle, accuracyMultiplier: spec.accMult });
+      const acc = spec!.guaranteed ? 1 : accuracy(action.load, monster, state, { styleOverride: spec!.defStyle, accuracyMultiplier: spec!.accMult });
       const ctx: SpecCtx = { load: action.load, acc, rng, state, monsterName: monster.name,
         isDemon: monster.attributes.includes('demon'), options: args.specOptions, onHit: () => { specHit = true; } };
-      for (const damage of spec.hits(ctx, spec.maxHit(action.load.maxHit))) {
+      for (const damage of spec!.hits(ctx, spec!.maxHit(action.load.maxHit))) {
         if (state.hp <= 0) break;
         state.hp -= Math.min(state.hp, applyDamageCap(damage, monster, rng));
       }
-      if (spec.id === 'zorya_tome' && specHit) zoryaEmpoweredAttacks = 3;
+      if (spec!.id === 'zorya_tome' && specHit) zoryaEmpoweredAttacks = 3;
     }
-    elapsed += attackSpeed;
-    if (state.hp <= 0) return { killed: true, ticks: elapsed };
+    if (state.hp <= 0) return { killed: true, ticks: elapsed + attackSpeed };
     const pause = i + 1 < Math.min(cutoff, actions.length)
       ? Math.max(0, Math.floor(action.downtimeAfterTicks ?? 0)) : 0;
-    for (let tick = 0; tick < pause; tick++) {
-      elapsed++;
-      if (energy < 100 && --regenCounter <= 0) {
-        energy = Math.min(100, energy + 10);
-        regenCounter = args.lightbearer ? 25 : 50;
-      }
-    }
-    for (let tick = 0; tick < attackSpeed; tick++) {
-      if (energy < 100 && --regenCounter <= 0) {
-        energy = Math.min(100, energy + 10);
-        regenCounter = args.lightbearer ? 25 : 50;
-      }
-    }
+    advanceTicks(pause + attackSpeed);
   }
   return { killed: false, ticks: elapsed };
 };
@@ -101,12 +104,13 @@ const attempt = (args: {
 /** Monte Carlo odds plus expected clear time under retry-after-prefix policies. */
 export const simulateSequence = (args: {
   monster: Monster; actions: SequenceAttack[]; trials: number; seed?: number;
-  startEnergy?: number; lightbearer?: boolean; specOptions?: Record<string, boolean>;
+  startEnergy?: number; ticksUntilRegen?: number; lightbearer?: boolean; useSurgePotion?: boolean; specOptions?: Record<string, boolean>;
   targetSeconds?: number; downtimeSeconds?: number; resetSeconds?: number;
 }): SequenceResult => {
   const { monster, actions } = args;
   const trials = Math.max(1, Math.floor(args.trials));
   const startEnergy = Math.max(0, Math.min(100, args.startEnergy ?? 100));
+  const ticksUntilRegen = Math.max(1, Math.floor(args.ticksUntilRegen ?? (args.lightbearer ? 25 : 50)));
   const specOptions = args.specOptions ?? {};
   const energyRequired = actions.reduce((sum, a) => sum + (a.spec?.cost ?? 0), 0);
   // Best-case plan duration: every Zorya spec lands and its next three Tome
@@ -142,8 +146,8 @@ export const simulateSequence = (args: {
     let timeSum = 0;
     const sampleRng = mulberry32((args.seed ?? 712367) + cutoff * 104729);
     for (let trial = 0; trial < trials; trial++) {
-      const outcome = attempt({ monster, actions, cutoff, rng: sampleRng, startEnergy,
-        lightbearer: !!args.lightbearer, specOptions });
+      const outcome = attempt({ monster, actions, cutoff, rng: sampleRng, startEnergy, ticksUntilRegen,
+        lightbearer: !!args.lightbearer, useSurgePotion: !!args.useSurgePotion, specOptions });
       if (outcome.killed) {
         kills++;
         timeSum += outcome.ticks * 0.6 + downtimeSeconds;
@@ -159,8 +163,8 @@ export const simulateSequence = (args: {
       // Independent sample for the ordinary single-attempt distribution.
       const fullRng = mulberry32(args.seed ?? 712367);
       for (let trial = 0; trial < trials; trial++) {
-        const outcome = attempt({ monster, actions, cutoff, rng: fullRng, startEnergy,
-          lightbearer: !!args.lightbearer, specOptions });
+        const outcome = attempt({ monster, actions, cutoff, rng: fullRng, startEnergy, ticksUntilRegen,
+          lightbearer: !!args.lightbearer, useSurgePotion: !!args.useSurgePotion, specOptions });
         if (outcome.killed) {
           killTicks.push(outcome.ticks);
           if (targetSeconds > 0 && outcome.ticks * 0.6 + downtimeSeconds <= targetSeconds) targetKills++;

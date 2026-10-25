@@ -1157,7 +1157,6 @@ export default function App() {
           equipment={equipment}
           specs={speedrunSpecs}
           specOptions={specOptions}
-          startEnergy={startEnergy}
           lightbearer={speedrunLoadout.gear.ring?.name === 'Lightbearer'}
           buildAttack={buildSpeedrunAttack}
           makePreset={(id) => {
