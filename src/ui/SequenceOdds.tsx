@@ -165,38 +165,42 @@ export default function SequenceOdds({
           return (
             <div className="sequence-action-card" key={step.id}>
               <div className="sequence-action">
-                <b>{String(index + 1).padStart(2, '0')}</b>
-                <label className="sequence-spec-toggle">
-                  <input
-                    type="checkbox"
-                    checked={step.specId !== null}
-                    onChange={(event) => updateStep(index, {
-                      specId: event.target.checked ? step.specId ?? specs[0]?.id ?? null : null,
-                    })}
-                  />
-                  Use spec
-                </label>
-                {step.specId ? (
-                  <select aria-label={`Special attack for attack ${index + 1}`} value={step.specId} onChange={(event) => updateStep(index, { specId: event.target.value })}>
-                    {specs.map((spec) => <option key={spec.id} value={spec.id}>{spec.def.name} ({spec.def.cost}%)</option>)}
-                  </select>
-                ) : <span className="sequence-regular">Regular attack</span>}
-                <span className="sequence-detail">{attack?.load.maxHit ?? 0} max · {attack?.load.speed ?? 0} ticks</span>
-                <button className="mini" title={step.gearOverride ? 'Edit this attack setup' : 'Set a gear switch for this attack'} onClick={() => {
-                  const baseStyles = stylesForCategory(baseGear.weapon?.category);
-                  updateStep(index, {
-                    editing: !step.editing,
-                    gearOverride: step.gearOverride ?? { ...baseGear },
-                    styleIndex: step.styleIndex ?? Math.min(baseStyleIndex, baseStyles.length - 1),
-                  });
-                }}>{step.gearOverride ? 'Edit setup' : 'Gear switch'}</button>
-                <button className="mini" title="Move earlier" disabled={index === 0} onClick={() => {
-                  setActions((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; }); setResult(null);
-                }}>↑</button>
-                <button className="mini" title="Move later" disabled={index === actions.length - 1} onClick={() => {
-                  setActions((current) => { const next = [...current]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; }); setResult(null);
-                }}>↓</button>
-                <button className="mini" title="Remove attack" disabled={actions.length <= 1} onClick={() => setAttackCount(actions.length - 1)}>×</button>
+                <div className="sequence-action-main">
+                  <b>{String(index + 1).padStart(2, '0')}</b>
+                  <label className="sequence-spec-toggle">
+                    <input
+                      type="checkbox"
+                      checked={step.specId !== null}
+                      onChange={(event) => updateStep(index, {
+                        specId: event.target.checked ? step.specId ?? specs[0]?.id ?? null : null,
+                      })}
+                    />
+                    Use spec
+                  </label>
+                  {step.specId ? (
+                    <select aria-label={`Special attack for attack ${index + 1}`} value={step.specId} onChange={(event) => updateStep(index, { specId: event.target.value })}>
+                      {specs.map((spec) => <option key={spec.id} value={spec.id}>{spec.def.name} ({spec.def.cost}%)</option>)}
+                    </select>
+                  ) : <span className="sequence-regular">Regular attack</span>}
+                  <span className="sequence-detail">{attack?.load.maxHit ?? 0} max · {attack?.load.speed ?? 0} ticks</span>
+                </div>
+                <div className="sequence-action-buttons">
+                  <button className="mini" title={step.gearOverride ? 'Edit this attack setup' : 'Set a gear switch for this attack'} onClick={() => {
+                    const baseStyles = stylesForCategory(baseGear.weapon?.category);
+                    updateStep(index, {
+                      editing: !step.editing,
+                      gearOverride: step.gearOverride ?? { ...baseGear },
+                      styleIndex: step.styleIndex ?? Math.min(baseStyleIndex, baseStyles.length - 1),
+                    });
+                  }}>{step.gearOverride ? 'Edit setup' : 'Gear switch'}</button>
+                  <button className="mini" title="Move earlier" disabled={index === 0} onClick={() => {
+                    setActions((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; }); setResult(null);
+                  }}>↑</button>
+                  <button className="mini" title="Move later" disabled={index === actions.length - 1} onClick={() => {
+                    setActions((current) => { const next = [...current]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; }); setResult(null);
+                  }}>↓</button>
+                  <button className="mini" title="Remove attack" disabled={actions.length <= 1} onClick={() => setAttackCount(actions.length - 1)}>×</button>
+                </div>
               </div>
 
               {step.editing && step.gearOverride && (
