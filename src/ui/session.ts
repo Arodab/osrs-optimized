@@ -46,6 +46,8 @@ export interface SessionState {
   speedrunLoadoutVersion?: number;
   /** Boss selected in Speedrun, independent of the SpecScape encounter sequence. */
   speedrunMonsterId?: string;
+  /** Combat levels for Speedrun, independent of the SpecScape levels. */
+  speedrunLevels?: CombatLevels;
   activeTab?: TabKind;
   lockedSlots?: Slot[];
 

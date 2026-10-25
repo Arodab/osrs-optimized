@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import GearGrid, { ItemIcon } from './GearGrid';
+import IconSelect from './IconSelect';
 import { ammoFor, type Equip, type GearSet, type Slot } from '../sim/gear';
 import { defaultStyleIndex, stylesForCategory } from '../sim/attackStyles';
 import type { Monster } from '../sim/types';
+import type { CombatLevels } from '../sim/loadout';
 import type { SequenceAttack, SequenceResult } from '../sim/sequence';
 import type { SpecDef } from '../sim/specs';
 import { gearToRefs, refsToGear, type ItemRef } from './setups';
@@ -23,6 +25,7 @@ interface AttackGroup {
 interface Props {
   monster: Monster | null; baseGear: GearSet;
   baseSetup: SequenceSetup;
+  combatLevels: CombatLevels;
   itemsBySlot: Map<Slot, Equip[]>; equipment: Equip[]; specs: SpecAttack[];
   specOptions: Record<string, boolean>; startEnergy: number; lightbearer: boolean;
   buildAttack: (setup: SequenceSetup, useSpec: boolean) => SequenceAttack | null;
@@ -66,7 +69,7 @@ const readStrategy = (equipment: Equip[]): LoadedStrategy | null => {
   } catch { return null; }
 };
 
-export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot, equipment, specs,
+export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevels, itemsBySlot, equipment, specs,
   specOptions, startEnergy, lightbearer, buildAttack, makePreset }: Props) {
   const [groups, setGroups] = useState<AttackGroup[]>([]);
   const [trials, setTrials] = useState(20000);
@@ -166,6 +169,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
           boss: monster ? { name: monster.name, version: monster.version } : null,
           baseLoadout: { gear: gearToRefs(baseSetup.gear), styleIndex: baseSetup.styleIndex,
             prayerKey: baseSetup.prayerKey, potionId: baseSetup.potionId, spellName: baseSetup.spellName },
+          combatLevels,
           strategy: groups.map((group) => ({ count: group.count, useSpec: group.useSpec,
             setup: group.setup ? { ...group.setup, gear: gearToRefs(group.setup.gear) } : null,
             downtimeSeconds: group.downtimeSeconds })),
@@ -188,6 +192,9 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
         const styleIndex = Math.min(setup.styleIndex, styles.length - 1);
         const attack = buildAttack(setup, group.useSpec);
         const weaponSpec = specForWeapon(gear.weapon?.name, specs);
+        const displayedMaxHit = attack
+          ? (group.useSpec && weaponSpec ? weaponSpec.def.maxHit(attack.load.maxHit) : attack.load.maxHit)
+          : 0;
         const customItems = new Map(itemsBySlot); customItems.set('ammo', ammoFor(gear.weapon, itemsBySlot.get('ammo') ?? []));
         const drag = { index };
         return <div className="sequence-action-card" key={group.id} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(index)); event.dataTransfer.effectAllowed = 'move'; }}
@@ -204,7 +211,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
                 onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} /><span>Use spec</span></label>
               {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
               <span className="sequence-detail">
-                {attack?.load.maxHit ?? 0} max · {group.useSpec && weaponSpec?.def.id === 'zorya_tome'
+                {displayedMaxHit} max · {group.useSpec && weaponSpec?.def.id === 'zorya_tome'
                   ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}
               </span>
             </div>
@@ -221,10 +228,12 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
           {group.editing && group.setup && <div className="sequence-setup-panel">
             <div className="sequence-setup-heading"><strong>Loadout {index + 1} · {gear.weapon?.name ?? 'Unarmed'}</strong>
               <button className="mini" onClick={() => updateGroup(index, { setup: null, editing: false })}>Use Speedrun default</button></div>
-            <label className="sequence-style-select"><span>Attack style</span><div className="speedrun-icon-select">
-              <img className="speedrun-game-icon" src="https://oldschool.runescape.wiki/images/Attack_style_icon.png" alt="" />
-              <select value={styleIndex} onChange={(event) => updateGroup(index, { setup: { ...group.setup!, styleIndex: Number(event.target.value) } })}>
-                {styles.map((style, i) => <option key={`${style.name}-${i}`} value={i}>{style.name} ({style.stance})</option>)}</select></div></label>
+            <label className="sequence-style-select"><span>Attack style</span>
+              <IconSelect ariaLabel={`Loadout ${index + 1} attack style`} value={String(styleIndex)}
+                options={styles.map((style, i) => ({ value: String(i), label: `${style.name} (${style.stance})`,
+                  icon: 'Attack_style_icon.png', fallback: '⚔' }))}
+                onChange={(value) => updateGroup(index, { setup: { ...group.setup!, styleIndex: Number(value) } })} />
+            </label>
             <GearGrid gear={gear} itemsBySlot={customItems} onChange={(slot, item) => {
               const nextGear = { ...gear, [slot]: item }; const nextStyles = stylesForCategory(nextGear.weapon?.category);
               const weaponHasSpec = !!specForWeapon(nextGear.weapon?.name, specs);

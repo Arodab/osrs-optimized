@@ -3,6 +3,7 @@ import GearGrid, { ItemIcon, itemLabel } from './ui/GearGrid';
 import SwitchesModal, { type SwitchPreview } from './ui/SwitchesModal';
 import DistributionModal from './ui/DistributionModal';
 import SequenceOdds, { type SequenceSetup } from './ui/SequenceOdds';
+import IconSelect, { type IconSelectOption } from './ui/IconSelect';
 import {
   SLOTS, DEFAULT_AMMO, ammoFor, ammoKindFor, pickVariant,
   type Equip, type GearSet, type Slot,
@@ -29,6 +30,7 @@ import {
   type SessionState, type EncounterDef, type TabKind
 } from './ui/session';
 import type { Monster, MonsterState, SpecResult, SimEncounter } from './sim/types';
+import type { CombatLevels } from './sim/loadout';
 import type { SequenceAttack } from './sim/sequence';
 import { SimPool, type SimProgress, type SimVariant } from './ui/simPool';
 import monstersData from '../public/data/monsters.json';
@@ -73,13 +75,12 @@ const POTION_ICON_FILES: Record<string, string> = {
   smelling_salts: 'Smelling salts (1).png',
   imbued_heart: 'Imbued heart.png',
 };
-const wikiIconUrl = (file: string) => `https://oldschool.runescape.wiki/images/${encodeURIComponent(file.replace(/ /g, '_'))}`;
-
-function SpeedrunGameIcon({ file, fallback }: { file?: string; fallback: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!file || failed) return <span className="speedrun-game-icon-fallback" aria-hidden="true">{fallback}</span>;
-  return <img className="speedrun-game-icon" src={wikiIconUrl(file)} alt="" onError={() => setFailed(true)} />;
-}
+const prayerSelectOptions: IconSelectOption[] = PRAYER_OPTIONS.map(([value, label]) => ({
+  value, label, icon: PRAYER_ICON_FILES[value], fallback: value === 'none' ? '–' : '✦',
+}));
+const potionSelectOptions: IconSelectOption[] = POTIONS.map((potion) => ({
+  value: potion.id, label: potion.label, icon: POTION_ICON_FILES[potion.id], fallback: potion.id === 'none' ? '–' : '⚗',
+}));
 
 /** What the search is doing right now, for the button and the empty state. */
 const progressLabel = (p: SimProgress | null): string => {
@@ -208,6 +209,7 @@ export default function App() {
   const { gear, presetId, prayerKey, styleIndex, potionId, spellName } = tabs[activeTab];
 
   const [levels, setLevels] = useState({ attack: 99, strength: 99, ranged: 99, magic: 99 });
+  const [speedrunLevels, setSpeedrunLevels] = useState<CombatLevels>({ attack: 99, strength: 99, ranged: 99, magic: 99 });
   const [buffs, setBuffs] = useState<Buffs>(DEFAULT_BUFFS);
   const [specOptions, setSpecOptions] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -352,13 +354,13 @@ export default function App() {
   );
   const speedrunSetup: SetupInput = useMemo(() => ({
     gear: speedrunLoadout.gear,
-    levels,
+    levels: speedrunLevels,
     potionId: speedrunLoadout.potionId,
     prayerKey: speedrunLoadout.prayerKey,
     styleIndex: speedrunLoadout.styleIndex,
     spell: speedrunSpell,
     buffs,
-  }), [speedrunLoadout, levels, speedrunSpell, buffs]);
+  }), [speedrunLoadout, speedrunLevels, speedrunSpell, buffs]);
   const mods = useMemo(() => activeModifiers(setup, firstEncounterMonster), [setup, firstEncounterMonster]);
 
   const mainDps = useMemo(
@@ -520,6 +522,7 @@ export default function App() {
     setSpeedrunMonsterId(prev.speedrunMonsterId ?? DEFAULT_MONSTER);
 
     if (prev.levels) setLevels(prev.levels);
+    setSpeedrunLevels(prev.speedrunLevels ?? prev.levels ?? { attack: 99, strength: 99, ranged: 99, magic: 99 });
     setBuffs(prev.buffs ?? DEFAULT_BUFFS);
     setSwitches(prev.switches ?? {});
     const restoredSpecs = knownSpecIds(prev.enabledSpecs);
@@ -551,6 +554,7 @@ export default function App() {
       speedrunLoadout: { ...speedrunLoadout, gear: gearToRefs(speedrunLoadout.gear) },
       speedrunLoadoutVersion: 2,
       speedrunMonsterId,
+      speedrunLevels,
       activeTab,
       lockedSlots: [...sharedSlots],
       levels, buffs, switches,
@@ -560,7 +564,7 @@ export default function App() {
     };
     saveSession(state);
   }, [
-    ready, equipment.length, encounters, tabs, speedrunLoadout, speedrunMonsterId, activeTab, sharedSlots, levels,
+    ready, equipment.length, encounters, tabs, speedrunLoadout, speedrunMonsterId, speedrunLevels, activeTab, sharedSlots, levels,
     buffs, switches, enabled, startEnergy, trials, kills,
     bankingSeconds, topSetups, compareLightbearer, setupName,
   ]);
@@ -1105,38 +1109,37 @@ export default function App() {
             <div className="speedrun-loadout-options">
               <label>
                 <span>Attack style</span>
-                <div className="speedrun-icon-select">
-                  <SpeedrunGameIcon file="Attack_style_icon.png" fallback="⚔" />
-                  <select value={speedrunLoadout.styleIndex} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, styleIndex: Number(event.target.value), presetId: '' }))}>
-                    {stylesFor(speedrunLoadout.gear).map((style, index) => <option key={`${style.name}-${index}`} value={index}>{style.name} ({style.stance}, {style.attackType})</option>)}
-                  </select>
-                </div>
+                <IconSelect ariaLabel="Attack style" value={String(speedrunLoadout.styleIndex)}
+                  options={stylesFor(speedrunLoadout.gear).map((style, index) => ({ value: String(index),
+                    label: `${style.name} (${style.stance}, ${style.attackType})`, icon: 'Attack_style_icon.png', fallback: '⚔' }))}
+                  onChange={(value) => setSpeedrunLoadout((current) => ({ ...current, styleIndex: Number(value), presetId: '' }))} />
               </label>
               <label>
                 <span>Prayer</span>
-                <div className="speedrun-icon-select">
-                  <SpeedrunGameIcon file={PRAYER_ICON_FILES[speedrunLoadout.prayerKey]} fallback="✦" />
-                  <select value={speedrunLoadout.prayerKey} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, prayerKey: event.target.value, presetId: '' }))}>
-                    {PRAYER_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                  </select>
-                </div>
+                <IconSelect ariaLabel="Prayer" value={speedrunLoadout.prayerKey} options={prayerSelectOptions}
+                  onChange={(value) => setSpeedrunLoadout((current) => ({ ...current, prayerKey: value, presetId: '' }))} />
               </label>
               <label>
                 <span>Potion</span>
-                <div className="speedrun-icon-select">
-                  <SpeedrunGameIcon file={POTION_ICON_FILES[speedrunLoadout.potionId]} fallback="⚗" />
-                  <select value={speedrunLoadout.potionId} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, potionId: event.target.value, presetId: '' }))}>
-                    {POTIONS.map((potion) => <option key={potion.id} value={potion.id}>{potion.label}</option>)}
-                  </select>
-                </div>
+                <IconSelect ariaLabel="Potion" value={speedrunLoadout.potionId} options={potionSelectOptions}
+                  onChange={(value) => setSpeedrunLoadout((current) => ({ ...current, potionId: value, presetId: '' }))} />
               </label>
             </div>
+          </div>
+          <div className="speedrun-levels">
+            {(['attack', 'strength', 'ranged', 'magic'] as const).map((skill) => <label key={skill}>
+              <span>{skill === 'magic' ? 'Magic level' : `${skill[0].toUpperCase()}${skill.slice(1)} level`}</span>
+              <input type="number" min={1} max={99} value={speedrunLevels[skill]}
+                onChange={(event) => setSpeedrunLevels((current) => ({ ...current,
+                  [skill]: Math.max(1, Math.min(99, Number(event.target.value) || 1)) }))} />
+            </label>)}
           </div>
         </section>
         <SequenceOdds
           monster={speedrunMonster}
           baseGear={speedrunLoadout.gear}
           baseSetup={{ ...speedrunLoadout, spellName: speedrunLoadout.spellName }}
+          combatLevels={speedrunLevels}
           itemsBySlot={itemsBySlot}
           equipment={equipment}
           specs={speedrunSpecs}
@@ -1382,31 +1385,23 @@ export default function App() {
             <div className="row">
               <label>
                 <span>Prayer</span>
-                <select value={prayerKey} onChange={(e) => updateTab({ prayerKey: e.target.value, presetId: '' })}>
-                  {PRAYER_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                <IconSelect ariaLabel="Prayer" value={prayerKey} options={prayerSelectOptions}
+                  onChange={(value) => updateTab({ prayerKey: value, presetId: '' })} />
               </label>
               <label>
                 <span>Potion</span>
-                <select value={potionId} onChange={(e) => updateTab({ potionId: e.target.value, presetId: '' })}>
-                  {POTIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                </select>
+                <IconSelect ariaLabel="Potion" value={potionId} options={potionSelectOptions}
+                  onChange={(value) => updateTab({ potionId: value, presetId: '' })} />
               </label>
             </div>
 
             <div className="row">
               <label>
                 <span>Attack style</span>
-                <select
-                  value={styleIndex}
-                  onChange={(e) => updateTab({ styleIndex: Number(e.target.value), presetId: '' })}
-                >
-                  {styles.map((s, i) => (
-                    <option key={`${s.name}-${i}`} value={i}>
-                      {s.name} ({s.stance}, {s.type})
-                    </option>
-                  ))}
-                </select>
+                <IconSelect ariaLabel="Attack style" value={String(styleIndex)}
+                  options={styles.map((style, index) => ({ value: String(index),
+                    label: `${style.name} (${style.stance}, ${style.type})`, icon: 'Attack_style_icon.png', fallback: '⚔' }))}
+                  onChange={(value) => updateTab({ styleIndex: Number(value), presetId: '' })} />
               </label>
               {needsSpell ? (
                 <label>

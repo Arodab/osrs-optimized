@@ -143,6 +143,14 @@ const hasOffensiveStats = (e) => Object.values(e.o).some((v) => v !== 0);
 const isUseful = (e) =>
   hasOffensiveStats(e) || KEEP_WITHOUT_STATS.some((re) => re.test(e.name));
 
+/** Recoloured slayer helmets have identical combat stats; keep one canonical pair. */
+const normalizeCosmeticSlayerHelmets = (items) => items.map((item) => {
+  if (!/slayer helmet/i.test(item.name) || /^Slayer helmet(?: \(i\))?$/i.test(item.name)) return item;
+  const imbued = /\(i\)/i.test(item.name);
+  return { ...item, name: imbued ? 'Slayer helmet (i)' : 'Slayer helmet',
+    image: imbued ? 'Slayer helmet (i).png' : 'Slayer helmet.png' };
+});
+
 /**
  * Gear that belongs to a separate game mode and cannot be used in the main game.
  */
@@ -230,7 +238,7 @@ const main = async () => {
 
   const m = [...baseMonsters, ...punishVariants];
   const e = collapseIdenticalVersions(
-    equipment.filter((x) => x.name && x.slot).map(slimEquipment),
+    normalizeCosmeticSlayerHelmets(equipment.filter((x) => x.name && x.slot).map(slimEquipment)),
   ).filter(isUseful).filter(isUsableInMainGame);
   const eFinal = collapseCosmeticVariants(e);
 

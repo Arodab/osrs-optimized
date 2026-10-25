@@ -57,9 +57,14 @@ export const toRef = (item: Equip): ItemRef => ({ name: item.name, version: item
 
 export const resolveRef = (ref: ItemRef | null | undefined, equipment: Equip[]): Equip | null => {
   if (!ref) return null;
+  const canonicalName = /slayer helmet/i.test(ref.name)
+    ? `Slayer helmet${/\(i\)/i.test(ref.name) ? ' (i)' : ''}`
+    : ref.name;
   return (
     equipment.find((e) => e.name === ref.name && e.version === ref.version)
     ?? equipment.find((e) => e.name === ref.name)
+    ?? equipment.find((e) => e.name === canonicalName && e.version === ref.version)
+    ?? equipment.find((e) => e.name === canonicalName)
     ?? null
   );
 };

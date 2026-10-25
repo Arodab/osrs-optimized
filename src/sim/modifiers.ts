@@ -33,7 +33,6 @@ const isOneOf = (item: Equip | null | undefined, names: string[]): boolean =>
 const BLACK_MASKS = [
   'Black mask', 'Black mask (i)',
   'Slayer helmet', 'Slayer helmet (i)',
-  'Oathplate slayer helmet', 'Oathplate slayer helmet (i)',
   "V's helm",
 ];
 
