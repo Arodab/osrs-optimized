@@ -40,6 +40,8 @@ export interface SessionState {
   encounters: EncounterDef[];
   
   tabs?: Record<TabKind, TabStateRaw>;
+  /** The Speedrun tool owns a separate loadout; this is never synced implicitly. */
+  speedrunLoadout?: TabStateRaw;
   activeTab?: TabKind;
   lockedSlots?: Slot[];
 

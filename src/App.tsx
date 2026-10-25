@@ -29,6 +29,7 @@ import {
   type SessionState, type EncounterDef, type TabKind
 } from './ui/session';
 import type { Monster, MonsterState, SpecResult, SimEncounter } from './sim/types';
+import type { SequenceAttack } from './sim/sequence';
 import { SimPool, type SimProgress, type SimVariant } from './ui/simPool';
 import monstersData from '../public/data/monsters.json';
 import equipmentData from '../public/data/equipment.json';
@@ -59,6 +60,36 @@ const progressLabel = (p: SimProgress | null): string => {
 const stateOf = (m: Monster): MonsterState => ({
   hp: m.hp, def: m.def, magic: m.magic, baseDef: m.def, baseAtk: 0, baseStr: 0,
 });
+
+interface LoadoutTab {
+  gear: GearSet;
+  presetId: string;
+  prayerKey: string;
+  styleIndex: number;
+  potionId: string;
+  spellName: string;
+}
+
+const presetTab = (id: string, equipment: Equip[]): LoadoutTab => {
+  const preset = PRESETS.find((p) => p.id === id) ?? PRESETS[0];
+  const gear: GearSet = {};
+  for (const [slot, ref] of Object.entries(preset.gear)) {
+    if (!ref) continue;
+    const { name, version } = parseGearRef(ref);
+    const item = pickVariant(equipment.filter((e) => e.name === name && (version === null || e.version === version)));
+    if (item) gear[slot as Slot] = item;
+  }
+  const styles = stylesFor(gear);
+  const styleIndex = styles.findIndex((style) => style.name === preset.styleName);
+  return {
+    gear,
+    presetId: preset.id,
+    prayerKey: preset.prayer,
+    spellName: preset.spell ?? '',
+    styleIndex: styleIndex < 0 ? 0 : styleIndex,
+    potionId: preset.type === 'ranged' ? 'ranging' : preset.type === 'magic' ? 'imbued_heart' : 'super_combat',
+  };
+};
 
 export default function App() {
   const [activePage, setActivePage] = useState<'specscape' | 'speedrun'>('specscape');
@@ -104,10 +135,13 @@ export default function App() {
   };
   const [activeTab, setActiveTab] = useState<TabKind>('melee');
   const [resultTab, setResultTab] = useState<number>(-1); // -1 = Overall, enc index for per-monster breakdown
-  const [tabs, setTabs] = useState<Record<TabKind, { gear: GearSet, presetId: string, prayerKey: string, styleIndex: number, potionId: string, spellName: string }>>({
+  const [tabs, setTabs] = useState<Record<TabKind, LoadoutTab>>({
     melee: { gear: {}, presetId: DEFAULT_PRESET, prayerKey: 'piety', styleIndex: 0, potionId: 'super_combat', spellName: '' },
     ranged: { gear: {}, presetId: 'max_ranged_tbow', prayerKey: 'rigour', styleIndex: 0, potionId: 'ranging', spellName: '' },
     magic: { gear: {}, presetId: 'max_magic_shadow', prayerKey: 'augury', styleIndex: 0, potionId: 'imbued_heart', spellName: '' },
+  });
+  const [speedrunLoadout, setSpeedrunLoadout] = useState<LoadoutTab>({
+    gear: {}, presetId: 'max_melee_scythe', prayerKey: 'piety', styleIndex: 0, potionId: 'super_combat', spellName: '',
   });
   const [sharedSlots, setSharedSlots] = useState<Set<Slot>>(new Set());
   
@@ -193,6 +227,12 @@ export default function App() {
     return map;
   }, [itemsBySlot, gear.weapon]);
 
+  const speedrunPickerItems = useMemo(() => {
+    const map = new Map(itemsBySlot);
+    map.set('ammo', ammoFor(speedrunLoadout.gear.weapon, itemsBySlot.get('ammo') ?? []));
+    return map;
+  }, [itemsBySlot, speedrunLoadout.gear.weapon]);
+
   const switchPickerItems = useMemo(() => {
     if (!editingSpec) return pickerItems;
     const specWeapon = specWeaponItem(editingSpec, equipment);
@@ -238,6 +278,23 @@ export default function App() {
   const monster = firstEncounterMonster;
 
   const main = useMemo(() => buildMain(setup, firstEncounterMonster), [setup, firstEncounterMonster]);
+  const speedrunStyle = useMemo(
+    () => selectedStyle(speedrunLoadout.gear, speedrunLoadout.styleIndex),
+    [speedrunLoadout.gear, speedrunLoadout.styleIndex],
+  );
+  const speedrunSpell = useMemo(
+    () => spells.find((s) => s.name === speedrunLoadout.spellName) ?? null,
+    [spells, speedrunLoadout.spellName],
+  );
+  const speedrunSetup: SetupInput = useMemo(() => ({
+    gear: speedrunLoadout.gear,
+    levels,
+    potionId: speedrunLoadout.potionId,
+    prayerKey: speedrunLoadout.prayerKey,
+    styleIndex: speedrunLoadout.styleIndex,
+    spell: speedrunSpell,
+    buffs,
+  }), [speedrunLoadout, levels, speedrunSpell, buffs]);
   const mods = useMemo(() => activeModifiers(setup, firstEncounterMonster), [setup, firstEncounterMonster]);
 
   const mainDps = useMemo(
@@ -258,10 +315,31 @@ export default function App() {
     return out;
   }, [switches, equipment]);
 
-  const sequenceSpecs = useMemo(
-    () => buildSpecCandidates(setup, equipment, new Set(SPECS.map((s) => s.id)), firstEncounterMonster, resolvedSwitches),
-    [setup, equipment, firstEncounterMonster, resolvedSwitches],
+  const speedrunSpecs = useMemo(
+    () => buildSpecCandidates(speedrunSetup, equipment, new Set(SPECS.map((s) => s.id)), firstEncounterMonster),
+    [speedrunSetup, equipment, firstEncounterMonster],
   );
+
+  const buildSpeedrunAttack = useCallback((
+    attackGear: GearSet,
+    attackStyleIndex: number,
+    specId: string | null,
+  ): SequenceAttack | null => {
+    const attackSetup = { ...speedrunSetup, gear: attackGear, styleIndex: attackStyleIndex };
+    if (!specId) {
+      const load = buildMain(attackSetup, firstEncounterMonster);
+      return { id: 'main', label: `Regular attack (${load.name})`, load };
+    }
+    const def = specById(specId);
+    const weapon = def ? specWeaponItem(def, equipment) : null;
+    if (!def || !weapon) return null;
+    return {
+      id: specId,
+      label: `${def.name} spec (${def.cost}%)`,
+      load: buildSpecLoadout(attackSetup, def, weapon, firstEncounterMonster),
+      spec: def,
+    };
+  }, [speedrunSetup, firstEncounterMonster, equipment]);
 
   const applyPreset = useCallback((id: string, targetTab?: TabKind) => {
     const preset = PRESETS.find((p) => p.id === id);
@@ -339,6 +417,7 @@ export default function App() {
         ranged: buildTabFromPreset('max_ranged_tbow'),
         magic: buildTabFromPreset('max_magic_shadow'),
       });
+      setSpeedrunLoadout(presetTab('max_melee_scythe', equipment));
       setReady(true);
       return;
     }
@@ -358,6 +437,9 @@ export default function App() {
       const tab = { gear: g, prayerKey: prev.prayerKey || 'none', styleIndex: prev.styleIndex ?? 0, potionId: prev.potionId || 'none', spellName: prev.spellName || '', presetId: prev.presetId || '' };
       setTabs({ melee: tab, ranged: tab, magic: tab });
     }
+    setSpeedrunLoadout(prev.speedrunLoadout
+      ? { ...prev.speedrunLoadout, gear: refsToGear(prev.speedrunLoadout.gear, equipment) }
+      : presetTab('max_melee_scythe', equipment));
 
     if (prev.levels) setLevels(prev.levels);
     setBuffs(prev.buffs ?? DEFAULT_BUFFS);
@@ -377,7 +459,7 @@ export default function App() {
 
   // Remember the working configuration for the next visit.
   useEffect(() => {
-    if (!restored.current || !equipment.length) return;
+    if (!ready || !restored.current || !equipment.length) return;
     
     const tabsRaw = {
       melee: { ...tabs.melee, gear: gearToRefs(tabs.melee.gear) },
@@ -388,6 +470,7 @@ export default function App() {
     const state: SessionState = {
       encounters,
       tabs: tabsRaw,
+      speedrunLoadout: { ...speedrunLoadout, gear: gearToRefs(speedrunLoadout.gear) },
       activeTab,
       lockedSlots: [...sharedSlots],
       levels, buffs, switches,
@@ -397,7 +480,7 @@ export default function App() {
     };
     saveSession(state);
   }, [
-    equipment.length, encounters, tabs, activeTab, sharedSlots, levels,
+    ready, equipment.length, encounters, tabs, speedrunLoadout, activeTab, sharedSlots, levels,
     buffs, switches, enabled, startEnergy, trials, kills,
     bankingSeconds, topSetups, compareLightbearer, setupName,
   ]);
@@ -601,6 +684,37 @@ export default function App() {
       }
       return nextTabs;
     });
+  };
+
+  const setSpeedrunSlot = (slot: Slot, item: Equip | null) => {
+    setSpeedrunLoadout((current) => {
+      const nextGear = { ...current.gear, [slot]: item };
+      let styleIndex = current.styleIndex;
+      if (slot === 'weapon') {
+        styleIndex = defaultStyleIndex(stylesFor(nextGear));
+        const kind = ammoKindFor(item);
+        const allowed = ammoFor(item, itemsBySlot.get('ammo') ?? []);
+        if (!kind) nextGear.ammo = null;
+        else if (!nextGear.ammo || !allowed.some((ammo) => ammo.id === nextGear.ammo?.id)) {
+          const wanted = DEFAULT_AMMO[kind];
+          nextGear.ammo = allowed.find((ammo) => ammo.name === wanted) ?? allowed[0] ?? null;
+        }
+      }
+      return { ...current, gear: nextGear, styleIndex, presetId: '' };
+    });
+  };
+
+  const importSpecScapeLoadout = () => {
+    setSpeedrunLoadout({ ...tabs[activeTab], gear: { ...tabs[activeTab].gear } });
+    setToast(`Imported ${activeTab} setup into Speedrun`);
+  };
+
+  const importSpeedrunLoadout = () => {
+    setTabs((all) => ({
+      ...all,
+      [activeTab]: { ...speedrunLoadout, gear: { ...speedrunLoadout.gear }, presetId: '' },
+    }));
+    setToast(`Imported Speedrun setup into ${activeTab} SpecScape`);
   };
 
   const toggleSharedSlot = (slot: Slot) => {
@@ -864,18 +978,67 @@ export default function App() {
         <section className="panel speedrun-context">
           <div>
             <span className="eyebrow">Speedrun simulator</span>
-            <h2>{firstEncounterMonster?.name ?? 'Choose a boss'} · {gear.weapon?.name ?? 'Unarmed'}</h2>
-            <p className="help-text">Build an attack sequence and estimate kill odds for a record attempt. This page uses your current boss and gear from SpecScape.</p>
+            <h2>{firstEncounterMonster?.name ?? 'Choose a boss'} · {speedrunLoadout.gear.weapon?.name ?? 'Unarmed'}</h2>
+            <p className="help-text">Build a record strategy. Speedrun keeps its own gear and combat setup; import between tools only when you choose.</p>
           </div>
-          <button type="button" className="mini" onClick={() => setActivePage('specscape')}>Edit boss and gear</button>
+          <button type="button" className="mini" onClick={importSpecScapeLoadout}>Import from SpecScape</button>
+        </section>
+        <section className="panel speedrun-loadout-panel">
+          <div className="speedrun-loadout-heading">
+            <div>
+              <h2>Speedrun loadout</h2>
+              <p className="help-text">This setup is independent from SpecScape and acts as the default for every attack.</p>
+            </div>
+            <label className="speedrun-preset">
+              <span>Preset</span>
+              <select value={speedrunLoadout.presetId} onChange={(event) => setSpeedrunLoadout(presetTab(event.target.value, equipment))}>
+                <option value="">Custom</option>
+                {PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="speedrun-loadout-controls">
+            <GearGrid
+              gear={speedrunLoadout.gear}
+              itemsBySlot={speedrunPickerItems}
+              onChange={setSpeedrunSlot}
+              attackType={speedrunStyle.attackType}
+              targetAttributes={firstEncounterMonster?.attributes ?? []}
+            />
+            <div className="speedrun-loadout-options">
+              <label>
+                <span>Attack style</span>
+                <select value={speedrunLoadout.styleIndex} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, styleIndex: Number(event.target.value), presetId: '' }))}>
+                  {stylesFor(speedrunLoadout.gear).map((style, index) => <option key={`${style.name}-${index}`} value={index}>{style.name} ({style.stance}, {style.attackType})</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Prayer</span>
+                <select value={speedrunLoadout.prayerKey} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, prayerKey: event.target.value, presetId: '' }))}>
+                  {PRAYER_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Potion</span>
+                <select value={speedrunLoadout.potionId} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, potionId: event.target.value, presetId: '' }))}>
+                  {POTIONS.map((potion) => <option key={potion.id} value={potion.id}>{potion.label}</option>)}
+                </select>
+              </label>
+              <button type="button" className="mini" onClick={() => setActivePage('specscape')}>Edit boss in SpecScape</button>
+            </div>
+          </div>
         </section>
         <SequenceOdds
           monster={firstEncounterMonster}
-          main={main}
-          specs={sequenceSpecs}
+          baseGear={speedrunLoadout.gear}
+          baseStyleIndex={speedrunLoadout.styleIndex}
+          itemsBySlot={itemsBySlot}
+          equipment={equipment}
+          specs={speedrunSpecs}
           specOptions={specOptions}
           startEnergy={startEnergy}
-          lightbearer={gear.ring?.name === 'Lightbearer'}
+          lightbearer={speedrunLoadout.gear.ring?.name === 'Lightbearer'}
+          buildAttack={buildSpeedrunAttack}
         />
       </main>
 
@@ -1056,7 +1219,10 @@ export default function App() {
       <div className="layout">
         <div>
           <section className="panel">
-            <h2>Your normal setup</h2>
+            <div className="panel-title-row">
+              <h2>Your normal setup</h2>
+              <button className="mini" type="button" onClick={importSpeedrunLoadout}>Import Speedrun loadout</button>
+            </div>
             <div className="tab-bar">
               {(['melee', 'ranged', 'magic'] as const).map(t => (
                 <button
