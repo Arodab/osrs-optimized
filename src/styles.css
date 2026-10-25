@@ -117,6 +117,14 @@ header p {
 .sequence-results > div > b { font-size: 16px; }
 .sequence-result-primary strong { color: var(--good); font-size: 24px; line-height: 1.2; }
 .sequence-caveat { grid-column: 1 / -1; margin: 0; }
+.layout > div:first-child .sequence-odds .sequence-detail { display: none; }
+.layout > div:first-child .sequence-odds .sequence-controls { flex-direction: column; align-items: stretch; }
+.layout > div:first-child .sequence-odds .sequence-controls label,
+.layout > div:first-child .sequence-odds .sequence-controls label:nth-of-type(2) { width: 100%; min-width: 0; }
+.layout > div:first-child .sequence-odds .sequence-add { flex-direction: column; align-items: stretch; min-width: 0; }
+.layout > div:first-child .sequence-odds .sequence-add select { width: 100%; }
+.layout > div:first-child .sequence-odds .sequence-run { width: 100% !important; }
+.layout > div:first-child .sequence-odds .sequence-results { grid-template-columns: 1fr; }
 @media (max-width: 700px) {
   .sequence-heading { align-items: flex-start; flex-direction: column; }
   .sequence-detail { display: none; }

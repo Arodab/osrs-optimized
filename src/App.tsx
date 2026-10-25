@@ -997,15 +997,6 @@ export default function App() {
         </section>
       </div>
 
-      <SequenceOdds
-        monster={firstEncounterMonster}
-        main={main}
-        specs={sequenceSpecs}
-        specOptions={specOptions}
-        startEnergy={startEnergy}
-        lightbearer={gear.ring?.name === 'Lightbearer'}
-      />
-
       <div className="layout">
         <div>
           <section className="panel">
@@ -1148,6 +1139,15 @@ export default function App() {
               </label>
             ))}
           </section>
+
+          <SequenceOdds
+            monster={firstEncounterMonster}
+            main={main}
+            specs={sequenceSpecs}
+            specOptions={specOptions}
+            startEnergy={startEnergy}
+            lightbearer={gear.ring?.name === 'Lightbearer'}
+          />
 
         </div>
 
