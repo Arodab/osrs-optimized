@@ -487,11 +487,13 @@ export default function App() {
     const restoredSpeedrunLoadout = prev.speedrunLoadout
       ? { ...prev.speedrunLoadout, gear: refsToGear(prev.speedrunLoadout.gear, equipment) }
       : null;
-    const wasOldMagicDefaultWithTome = restoredSpeedrunLoadout?.presetId === 'max_magic_shadow'
-      && restoredSpeedrunLoadout.gear.weapon?.name === "Zorya's tome";
-    const wasUnchangedOldSpeedrunDefault = restoredSpeedrunLoadout?.presetId === 'max_melee_scythe'
-      && restoredSpeedrunLoadout.gear.weapon?.name === 'Scythe of Vitur';
-    setSpeedrunLoadout(!restoredSpeedrunLoadout || wasOldMagicDefaultWithTome || wasUnchangedOldSpeedrunDefault
+    const hasLegacyTomeOathplateDefault = !!restoredSpeedrunLoadout && (
+      restoredSpeedrunLoadout.gear.weapon?.name === "Zorya's tome"
+      || restoredSpeedrunLoadout.gear.body?.name?.startsWith('Oathplate')
+      || restoredSpeedrunLoadout.gear.legs?.name?.startsWith('Oathplate')
+    );
+    const shouldMigrateSpeedrunDefault = (prev.speedrunLoadoutVersion ?? 0) < 2 && hasLegacyTomeOathplateDefault;
+    setSpeedrunLoadout(!restoredSpeedrunLoadout || shouldMigrateSpeedrunDefault
       ? defaultSpeedrunTab(equipment)
       : restoredSpeedrunLoadout);
     setSpeedrunMonsterId(prev.speedrunMonsterId ?? DEFAULT_MONSTER);
@@ -526,6 +528,7 @@ export default function App() {
       encounters,
       tabs: tabsRaw,
       speedrunLoadout: { ...speedrunLoadout, gear: gearToRefs(speedrunLoadout.gear) },
+      speedrunLoadoutVersion: 2,
       speedrunMonsterId,
       activeTab,
       lockedSlots: [...sharedSlots],

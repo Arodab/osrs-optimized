@@ -158,7 +158,8 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
 
   return <section className="panel sequence-odds">
     <div className="sequence-heading"><div><h2>Speedrun odds</h2>
-      <p className="help-text">Build a repeatable attack sequence for {monster?.name ?? 'the selected boss'}.</p></div>
+      <p className="help-text">Build a repeatable attack sequence for {monster?.name ?? 'the selected boss'}.</p>
+      <p className="help-text">Zorya's tome: a successful 3-tick spec empowers its next 3 tome attacks. Each takes 2 ticks. Add those 3 attacks to model the full 9-tick, four-attack window.</p></div>
       <div className="sequence-heading-actions"><span className="fact">{attackCount} attacks · {energyRequired}% total spec cost</span>
         <button className="mini" onClick={() => downloadJson('speedrun-loadout.json', {
           schema: 'specscape.speedrun-loadout.v1', exportedAt: new Date().toISOString(),
@@ -198,9 +199,14 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
               <label className="sequence-count-control"><span>Attacks</span><input type="number" min={1} max={MAX_ATTACKS} value={group.count} onChange={(event) => setCount(index, Number(event.target.value))} /></label>
               <label className="sequence-spec-toggle"><input type="checkbox" checked={group.useSpec} disabled={!weaponSpec}
                 title={weaponSpec ? `Use ${weaponSpec.def.name} special` : 'No modeled special attack for this weapon'}
-                onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} />Use spec{group.useSpec && weaponSpec ? ` · ${weaponSpec.def.name}` : ''}</label>
+                onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} />Use spec</label>
               {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
-              <span className="sequence-detail">{attack?.load.maxHit ?? 0} max · {attack?.load.speed ?? 0} ticks</span>
+              <span className="sequence-detail" title={group.useSpec && weaponSpec?.def.id === 'zorya_tome'
+                ? 'Opening special takes 3 ticks. If it hits, the next 3 Tome attacks are empowered at 2 ticks each; add those attacks to simulate the full 9-tick window.'
+                : undefined}>
+                {attack?.load.maxHit ?? 0} max · {group.useSpec && weaponSpec?.def.id === 'zorya_tome'
+                  ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}
+              </span>
             </div>
             <div className="sequence-action-buttons">
               <button className="mini" title="Edit gear and attack style" onClick={() => updateGroup(index, { editing: !group.editing, setup: group.setup ?? { ...baseSetup, gear: { ...baseGear } } })}>{group.setup ? 'Edit setup' : 'Gear switch'}</button>
@@ -240,6 +246,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
       <div className="sequence-result-primary"><span>Kill chance per attempt</span><strong>{chance(result.killChance)}</strong><small>{result.kills.toLocaleString()} / {result.trials.toLocaleString()} trials</small></div>
       <div className="sequence-result-primary"><span>Best reset point</span><strong>{result.optimalResetAfterAttack === null ? 'None' : `After attack ${result.optimalResetAfterAttack}`}</strong><small>{result.expectedKillSeconds === null ? 'No kills observed at any cutoff' : `${result.expectedKillSeconds.toFixed(2)}s expected per kill with retries`}</small></div>
       {result.targetChance !== null && <div className="sequence-result-primary"><span>At or under {result.targetSeconds.toFixed(1)}s</span><strong>{chance(result.targetChance)}</strong><small>single-attempt kill chance</small></div>}
+      <div><span>Sequence length if Tome specs hit</span><b>{result.sequenceTicks} ticks · {(result.sequenceTicks * .6).toFixed(2)}s</b><small>includes the 2-tick empowered Tome attacks and configured pauses</small></div>
       <div><span>Mean / median kill time</span><b>{result.meanKillTicks === null ? 'No kills' : `${(result.meanKillTicks * .6 + result.downtimeSeconds).toFixed(2)}s / ${((result.medianKillTicks ?? 0) * .6 + result.downtimeSeconds).toFixed(2)}s`}</b><small>successful attempts including kill overhead</small></div>
       <div className="sequence-reset-options"><span>Reset strategy comparison</span>{result.resetOptions.map((option) => <small key={option.afterAttack}>After {option.afterAttack}: {chance(option.chance)} · {option.expectedSeconds === null ? 'no sampled kills' : `${option.expectedSeconds.toFixed(2)}s expected`}</small>)}</div>
       {result.mathematicallyImpossible && <p className="warn sequence-caveat">This sequence is mathematically unable to deal enough maximum damage to defeat this boss, even if every hit reaches its maximum.</p>}

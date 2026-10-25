@@ -104,7 +104,17 @@ export const simulateSequence = (args: {
   const startEnergy = Math.max(0, Math.min(100, args.startEnergy ?? 100));
   const specOptions = args.specOptions ?? {};
   const energyRequired = actions.reduce((sum, a) => sum + (a.spec?.cost ?? 0), 0);
-  const sequenceTicks = actions.reduce((sum, a) => sum + a.load.speed + Math.max(0, a.downtimeAfterTicks ?? 0), 0);
+  // Best-case plan duration: every Zorya spec lands and its next three Tome
+  // attacks use the empowered 2-tick speed. The Monte Carlo result below still
+  // branches on whether each spec actually hits.
+  let tomeEmpoweredAttacks = 0;
+  const sequenceTicks = actions.reduce((sum, action) => {
+    const isTome = action.weaponName === "Zorya's tome";
+    const speed = isTome && tomeEmpoweredAttacks > 0 ? 2 : action.load.speed;
+    if (isTome && tomeEmpoweredAttacks > 0) tomeEmpoweredAttacks--;
+    if (action.spec?.id === 'zorya_tome') tomeEmpoweredAttacks = 3;
+    return sum + speed + Math.max(0, action.downtimeAfterTicks ?? 0);
+  }, 0);
   const targetSeconds = Math.max(0, args.targetSeconds ?? 0);
   const downtimeSeconds = Math.max(0, args.downtimeSeconds ?? 0);
   const resetSeconds = Math.max(0, args.resetSeconds ?? 0);
