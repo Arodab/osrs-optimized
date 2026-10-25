@@ -22,10 +22,51 @@ body {
 }
 
 .app {
-  max-width: 1400px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 1432px;
   margin: 0 auto;
   padding: 20px 16px 64px;
 }
+
+.app-shell { display: flex; min-height: 100vh; }
+.site-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: 0 0 204px;
+  flex-direction: column;
+  align-self: flex-start;
+  width: 204px;
+  height: 100vh;
+  padding: 18px 12px;
+  background: #101010;
+  border-right: 1px solid var(--line);
+  transition: width .18s ease, flex-basis .18s ease;
+}
+.nav-collapsed .site-sidebar { width: 64px; flex-basis: 64px; padding-inline: 8px; }
+.sidebar-brand { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 7px; font-weight: 700; white-space: nowrap; }
+.sidebar-mark { display: grid; flex: 0 0 28px; width: 28px; height: 28px; place-items: center; border-radius: 7px; color: white; background: var(--accent); }
+.sidebar-brand-name { overflow: hidden; }
+.sidebar-collapse { margin: 16px 0 12px; height: 30px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--panel); font-size: 19px; line-height: 1; }
+.page-nav { display: grid; gap: 6px; }
+.page-nav-item { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--muted); text-align: left; background: transparent; white-space: nowrap; }
+.page-nav-item:hover { color: var(--text); background: var(--panel); }
+.page-nav-item.active { color: var(--text); border-color: rgba(230,57,57,.35); background: rgba(230,57,57,.12); }
+.page-nav-icon { display: inline-grid; flex: 0 0 20px; width: 20px; place-items: center; color: var(--accent); font-weight: 700; }
+.page-nav-label { overflow: hidden; text-overflow: ellipsis; }
+.sidebar-footer { display: flex; align-items: center; gap: 12px; margin-top: auto; padding: 8px 10px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.nav-collapsed .sidebar-brand-name, .nav-collapsed .page-nav-label { display: none; }
+.nav-collapsed .page-nav-item { justify-content: center; padding-inline: 0; }
+.nav-collapsed .sidebar-footer { justify-content: center; padding-inline: 0; }
+.nav-collapsed .sidebar-collapse { width: 100%; }
+.site-page[hidden] { display: none !important; }
+.speedrun-context { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.speedrun-context h2 { margin: 3px 0 4px; color: var(--text); font-size: 19px; text-transform: none; letter-spacing: 0; }
+.speedrun-context p { margin: 0; }
+.eyebrow { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.speedrun-page .sequence-odds { min-height: 250px; }
+.speedrun-page .sequence-controls { align-items: end; }
 
 header {
   display: flex;
@@ -117,15 +158,14 @@ header p {
 .sequence-results > div > b { font-size: 16px; }
 .sequence-result-primary strong { color: var(--good); font-size: 24px; line-height: 1.2; }
 .sequence-caveat { grid-column: 1 / -1; margin: 0; }
-.layout > div:first-child .sequence-odds .sequence-detail { display: none; }
-.layout > div:first-child .sequence-odds .sequence-controls { flex-direction: column; align-items: stretch; }
-.layout > div:first-child .sequence-odds .sequence-controls label,
-.layout > div:first-child .sequence-odds .sequence-controls label:nth-of-type(2) { width: 100%; min-width: 0; }
-.layout > div:first-child .sequence-odds .sequence-add { flex-direction: column; align-items: stretch; min-width: 0; }
-.layout > div:first-child .sequence-odds .sequence-add select { width: 100%; }
-.layout > div:first-child .sequence-odds .sequence-run { width: 100% !important; }
-.layout > div:first-child .sequence-odds .sequence-results { grid-template-columns: 1fr; }
 @media (max-width: 700px) {
+  .site-sidebar { flex-basis: 58px; width: 58px; padding: 12px 6px; }
+  .nav-collapsed .site-sidebar { flex-basis: 58px; width: 58px; padding: 12px 6px; }
+  .site-sidebar .sidebar-brand-name, .site-sidebar .page-nav-label, .site-sidebar .sidebar-footer { display: none; }
+  .sidebar-brand { justify-content: center; padding-inline: 0; }
+  .page-nav-item { justify-content: center; padding-inline: 0; }
+  .sidebar-collapse { margin-top: 12px; }
+  .speedrun-context { align-items: flex-start; flex-direction: column; }
   .sequence-heading { align-items: flex-start; flex-direction: column; }
   .sequence-detail { display: none; }
   .sequence-controls, .sequence-add { min-width: 0; width: 100%; }

@@ -85,7 +85,7 @@ export const buildMain = (setup: SetupInput, monster: Monster | null): Loadout =
   const mods = resolveModifiers(buffs, gear, monster, type);
 
   // Rapid shaves a tick off the weapon's attack speed.
-  const speed = Math.max(1, (weapon?.speed ?? 4) + stance.speedDelta);
+  const speed = Math.max(1, style.speed ?? ((weapon?.speed ?? 4) + stance.speedDelta));
 
   const maxHitOverride = type === 'magic'
     ? magicMaxHit({

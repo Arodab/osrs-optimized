@@ -20,6 +20,8 @@ export interface AttackStyle {
   stance: Stance;
   /** Melee, ranged or magic - decides which levels and bonuses apply. */
   attackType: AttackType;
+  /** Some weapons offer styles with a different speed from their default. */
+  speed?: number;
 }
 
 export interface StanceBonus {
@@ -165,6 +167,11 @@ const BY_CATEGORY: Record<string, AttackStyle[]> = {
     melee('Chop', 'slash', 'accurate'),
     melee('Slash', 'slash', 'aggressive'),
     melee('Block', 'slash', 'defensive'),
+  ],
+  'Extending Chain Mace': [
+    melee('Thrust', 'crush', 'accurate'),
+    melee('Thrust', 'crush', 'aggressive'),
+    { ...melee('Smash', 'crush', 'aggressive'), speed: 3 },
   ],
 
   // Staves can bash, but anyone comparing specs is casting.

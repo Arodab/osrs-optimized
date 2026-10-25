@@ -61,6 +61,8 @@ const stateOf = (m: Monster): MonsterState => ({
 });
 
 export default function App() {
+  const [activePage, setActivePage] = useState<'specscape' | 'speedrun'>('specscape');
+  const [navCollapsed, setNavCollapsed] = useState(false);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [equipment, setEquipment] = useState<Equip[]>([]);
   const [spells, setSpells] = useState<Spell[]>([]);
@@ -796,7 +798,41 @@ export default function App() {
   if (loading) return <div className="app"><p>Loading game data...</p></div>;
 
   return (
-    <div className="app">
+    <div className={`app-shell ${navCollapsed ? 'nav-collapsed' : ''}`}>
+      <aside className="site-sidebar" aria-label="Site pages">
+        <div className="sidebar-brand"><span className="sidebar-mark">S</span><span className="sidebar-brand-name">SpecScape</span></div>
+        <button
+          className="sidebar-collapse"
+          type="button"
+          aria-label={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          aria-expanded={!navCollapsed}
+          onClick={() => setNavCollapsed((collapsed) => !collapsed)}
+        >
+          {navCollapsed ? '›' : '‹'}
+        </button>
+        <nav className="page-nav">
+          <button
+            type="button"
+            className={`page-nav-item ${activePage === 'specscape' ? 'active' : ''}`}
+            aria-current={activePage === 'specscape' ? 'page' : undefined}
+            title="SpecScape"
+            onClick={() => setActivePage('specscape')}
+          >
+            <span className="page-nav-icon">⚔</span><span className="page-nav-label">SpecScape</span>
+          </button>
+          <button
+            type="button"
+            className={`page-nav-item ${activePage === 'speedrun' ? 'active' : ''}`}
+            aria-current={activePage === 'speedrun' ? 'page' : undefined}
+            title="Speedrun"
+            onClick={() => setActivePage('speedrun')}
+          >
+            <span className="page-nav-icon">◷</span><span className="page-nav-label">Speedrun</span>
+          </button>
+        </nav>
+        <div className="sidebar-footer"><span className="page-nav-icon">OSRS</span><span className="page-nav-label">Combat tools</span></div>
+      </aside>
+      <div className="app">
       <header className="top-bar">
         <div className="header-text">
           <h1>Spec<span>Scape</span></h1>
@@ -824,6 +860,26 @@ export default function App() {
         </div>
       </header>
 
+      <main className="site-page speedrun-page" hidden={activePage !== 'speedrun'}>
+        <section className="panel speedrun-context">
+          <div>
+            <span className="eyebrow">Speedrun simulator</span>
+            <h2>{firstEncounterMonster?.name ?? 'Choose a boss'} · {gear.weapon?.name ?? 'Unarmed'}</h2>
+            <p className="help-text">Build an attack sequence and estimate kill odds for a record attempt. This page uses your current boss and gear from SpecScape.</p>
+          </div>
+          <button type="button" className="mini" onClick={() => setActivePage('specscape')}>Edit boss and gear</button>
+        </section>
+        <SequenceOdds
+          monster={firstEncounterMonster}
+          main={main}
+          specs={sequenceSpecs}
+          specOptions={specOptions}
+          startEnergy={startEnergy}
+          lightbearer={gear.ring?.name === 'Lightbearer'}
+        />
+      </main>
+
+      <main className="site-page specscape-page" hidden={activePage !== 'specscape'}>
       <div className="top-panels">
         <section className="panel">
           <h2>Sequence</h2>
@@ -1140,15 +1196,6 @@ export default function App() {
             ))}
           </section>
 
-          <SequenceOdds
-            monster={firstEncounterMonster}
-            main={main}
-            specs={sequenceSpecs}
-            specOptions={specOptions}
-            startEnergy={startEnergy}
-            lightbearer={gear.ring?.name === 'Lightbearer'}
-          />
-
         </div>
 
         <section className="panel">
@@ -1298,6 +1345,7 @@ Click for the kill-time distribution`}
           )}
         </section>
       </div>
+      </main>
 
       {showDist && rows && (() => {
         const full = rows.find((r) => r.planId === showDist);
@@ -1341,6 +1389,7 @@ Click for the kill-time distribution`}
         <a href="https://github.com/weirdgloop/osrs-dps-calc" target="_blank" rel="noreferrer">wiki DPS calculator</a>{' '}
         dataset. Item images are served from the wiki. Not affiliated with Jagex.
       </footer>
+      </div>
     </div>
   );
 }

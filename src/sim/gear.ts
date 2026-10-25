@@ -51,7 +51,7 @@ export const sumBonuses = (set: GearSet, opts: { excludeWeapon?: boolean } = {})
 /** Melee attack styles a weapon category can use, and the matching defence stat. */
 const MELEE_SLASH = ['Slash Sword', '2h Sword', 'Whip', 'Claw', 'Axe', 'Banner'];
 const MELEE_STAB = ['Stab Sword', 'Spear', 'Spiked', 'Polearm', 'Pickaxe'];
-const MELEE_CRUSH = ['Blunt', 'Bludgeon', 'Bulwark', 'Unarmed'];
+const MELEE_CRUSH = ['Blunt', 'Bludgeon', 'Bulwark', 'Unarmed', 'Extending Chain Mace'];
 const RANGED = ['Bow', 'Crossbow', 'Thrown', 'Chinchompas', 'Salamander'];
 const MAGIC = ['Staff', 'Powered Staff', 'Bladed Staff', 'Polestaff'];
 
