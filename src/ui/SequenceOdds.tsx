@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import GearGrid from './GearGrid';
+import GearGrid, { ItemIcon } from './GearGrid';
 import { ammoFor, type Equip, type GearSet, type Slot } from '../sim/gear';
 import { defaultStyleIndex, stylesForCategory } from '../sim/attackStyles';
 import type { Monster } from '../sim/types';
@@ -159,7 +159,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
   return <section className="panel sequence-odds">
     <div className="sequence-heading"><div><h2>Speedrun odds</h2>
       <p className="help-text">Build a repeatable attack sequence for {monster?.name ?? 'the selected boss'}.</p>
-      <p className="help-text">Zorya's tome: a successful 3-tick spec empowers its next 3 tome attacks. Each takes 2 ticks. Add those 3 attacks to model the full 9-tick, four-attack window.</p></div>
+      </div>
       <div className="sequence-heading-actions"><span className="fact">{attackCount} attacks · {energyRequired}% total spec cost</span>
         <button className="mini" onClick={() => downloadJson('speedrun-loadout.json', {
           schema: 'specscape.speedrun-loadout.v1', exportedAt: new Date().toISOString(),
@@ -195,15 +195,15 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
           <div className="sequence-action">
             <div className="sequence-action-main">
               <span className="sequence-drag" title="Drag to reorder">⠿</span><b>{String(index + 1).padStart(2, '0')}</b>
-              <span className="sequence-weapon" title={gear.weapon?.name ?? 'Unarmed'}>{gear.weapon?.name ?? 'Unarmed'}</span>
+              <span className="sequence-weapon" title={gear.weapon?.name ?? 'Unarmed'}>
+                {gear.weapon && <ItemIcon item={gear.weapon} size={24} />}
+                <span>{gear.weapon?.name ?? 'Unarmed'}</span>
+              </span>
               <label className="sequence-count-control"><span>Attacks</span><input type="number" min={1} max={MAX_ATTACKS} value={group.count} onChange={(event) => setCount(index, Number(event.target.value))} /></label>
-              <label className="sequence-spec-toggle"><input type="checkbox" checked={group.useSpec} disabled={!weaponSpec}
-                title={weaponSpec ? `Use ${weaponSpec.def.name} special` : 'No modeled special attack for this weapon'}
-                onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} />Use spec</label>
+              <label className="sequence-spec-toggle" title={weaponSpec ? `Use ${weaponSpec.def.name} special` : 'No modeled special attack for this weapon'}><input type="checkbox" role="switch" aria-label="Use special attack" checked={group.useSpec} disabled={!weaponSpec}
+                onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} /><span>Use spec</span></label>
               {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
-              <span className="sequence-detail" title={group.useSpec && weaponSpec?.def.id === 'zorya_tome'
-                ? 'Opening special takes 3 ticks. If it hits, the next 3 Tome attacks are empowered at 2 ticks each; add those attacks to simulate the full 9-tick window.'
-                : undefined}>
+              <span className="sequence-detail">
                 {attack?.load.maxHit ?? 0} max · {group.useSpec && weaponSpec?.def.id === 'zorya_tome'
                   ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}
               </span>
@@ -221,8 +221,10 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
           {group.editing && group.setup && <div className="sequence-setup-panel">
             <div className="sequence-setup-heading"><strong>Loadout {index + 1} · {gear.weapon?.name ?? 'Unarmed'}</strong>
               <button className="mini" onClick={() => updateGroup(index, { setup: null, editing: false })}>Use Speedrun default</button></div>
-            <label className="sequence-style-select"><span>Attack style</span><select value={styleIndex} onChange={(event) => updateGroup(index, { setup: { ...group.setup!, styleIndex: Number(event.target.value) } })}>
-              {styles.map((style, i) => <option key={`${style.name}-${i}`} value={i}>{style.name} ({style.stance})</option>)}</select></label>
+            <label className="sequence-style-select"><span>Attack style</span><div className="speedrun-icon-select">
+              <img className="speedrun-game-icon" src="https://oldschool.runescape.wiki/images/Attack_style_icon.png" alt="" />
+              <select value={styleIndex} onChange={(event) => updateGroup(index, { setup: { ...group.setup!, styleIndex: Number(event.target.value) } })}>
+                {styles.map((style, i) => <option key={`${style.name}-${i}`} value={i}>{style.name} ({style.stance})</option>)}</select></div></label>
             <GearGrid gear={gear} itemsBySlot={customItems} onChange={(slot, item) => {
               const nextGear = { ...gear, [slot]: item }; const nextStyles = stylesForCategory(nextGear.weapon?.category);
               const weaponHasSpec = !!specForWeapon(nextGear.weapon?.name, specs);

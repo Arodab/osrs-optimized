@@ -60,6 +60,27 @@ const PRAYER_OPTIONS = [
   ['zeal', 'Zeal'], ['eagleEye', 'Eagle Eye'], ['rigour', 'Rigour'], ['augury', 'Augury'],
 ] as const;
 
+const PRAYER_ICON_FILES: Record<string, string> = {
+  chivalry: 'Chivalry.png', piety: 'Piety.png', zeal: 'Zeal.png',
+  eagleEye: 'Eagle Eye.png', rigour: 'Rigour.png', augury: 'Augury.png',
+};
+const POTION_ICON_FILES: Record<string, string> = {
+  super_combat: 'Super combat potion(4).png',
+  super_att_str: 'Super attack potion(4).png',
+  ranging: 'Ranging potion(4).png',
+  bastion: 'Bastion potion(4).png',
+  overload: 'Overload (4).png',
+  smelling_salts: 'Smelling salts (1).png',
+  imbued_heart: 'Imbued heart.png',
+};
+const wikiIconUrl = (file: string) => `https://oldschool.runescape.wiki/images/${encodeURIComponent(file.replace(/ /g, '_'))}`;
+
+function SpeedrunGameIcon({ file, fallback }: { file?: string; fallback: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!file || failed) return <span className="speedrun-game-icon-fallback" aria-hidden="true">{fallback}</span>;
+  return <img className="speedrun-game-icon" src={wikiIconUrl(file)} alt="" onError={() => setFailed(true)} />;
+}
+
 /** What the search is doing right now, for the button and the empty state. */
 const progressLabel = (p: SimProgress | null): string => {
   if (!p) return 'Simulating...';
@@ -1084,21 +1105,30 @@ export default function App() {
             <div className="speedrun-loadout-options">
               <label>
                 <span>Attack style</span>
-                <select value={speedrunLoadout.styleIndex} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, styleIndex: Number(event.target.value), presetId: '' }))}>
-                  {stylesFor(speedrunLoadout.gear).map((style, index) => <option key={`${style.name}-${index}`} value={index}>{style.name} ({style.stance}, {style.attackType})</option>)}
-                </select>
+                <div className="speedrun-icon-select">
+                  <SpeedrunGameIcon file="Attack_style_icon.png" fallback="⚔" />
+                  <select value={speedrunLoadout.styleIndex} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, styleIndex: Number(event.target.value), presetId: '' }))}>
+                    {stylesFor(speedrunLoadout.gear).map((style, index) => <option key={`${style.name}-${index}`} value={index}>{style.name} ({style.stance}, {style.attackType})</option>)}
+                  </select>
+                </div>
               </label>
               <label>
                 <span>Prayer</span>
-                <select value={speedrunLoadout.prayerKey} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, prayerKey: event.target.value, presetId: '' }))}>
-                  {PRAYER_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
+                <div className="speedrun-icon-select">
+                  <SpeedrunGameIcon file={PRAYER_ICON_FILES[speedrunLoadout.prayerKey]} fallback="✦" />
+                  <select value={speedrunLoadout.prayerKey} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, prayerKey: event.target.value, presetId: '' }))}>
+                    {PRAYER_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  </select>
+                </div>
               </label>
               <label>
                 <span>Potion</span>
-                <select value={speedrunLoadout.potionId} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, potionId: event.target.value, presetId: '' }))}>
-                  {POTIONS.map((potion) => <option key={potion.id} value={potion.id}>{potion.label}</option>)}
-                </select>
+                <div className="speedrun-icon-select">
+                  <SpeedrunGameIcon file={POTION_ICON_FILES[speedrunLoadout.potionId]} fallback="⚗" />
+                  <select value={speedrunLoadout.potionId} onChange={(event) => setSpeedrunLoadout((current) => ({ ...current, potionId: event.target.value, presetId: '' }))}>
+                    {POTIONS.map((potion) => <option key={potion.id} value={potion.id}>{potion.label}</option>)}
+                  </select>
+                </div>
               </label>
             </div>
           </div>
