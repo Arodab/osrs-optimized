@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import GearGrid from './GearGrid';
 import { ammoFor, type Equip, type GearSet, type Slot } from '../sim/gear';
 import { defaultStyleIndex, stylesForCategory } from '../sim/attackStyles';
@@ -17,15 +17,15 @@ export interface SequenceSetup {
 }
 interface SpecAttack { id: string; def: SpecDef }
 interface AttackGroup {
-  id: string; count: number; specId: string | null; setup: SequenceSetup | null;
+  id: string; count: number; useSpec: boolean; setup: SequenceSetup | null;
   downtimeSeconds: number; editing: boolean;
 }
 interface Props {
-  monster: Monster | null; baseGear: GearSet; baseStyleIndex: number;
+  monster: Monster | null; baseGear: GearSet;
   baseSetup: SequenceSetup;
   itemsBySlot: Map<Slot, Equip[]>; equipment: Equip[]; specs: SpecAttack[];
   specOptions: Record<string, boolean>; startEnergy: number; lightbearer: boolean;
-  buildAttack: (setup: SequenceSetup, specId: string | null) => SequenceAttack | null;
+  buildAttack: (setup: SequenceSetup, useSpec: boolean) => SequenceAttack | null;
   makePreset: (id: string) => SequenceSetup;
 }
 interface StoredGroup extends Omit<AttackGroup, 'setup'> {
@@ -38,8 +38,14 @@ interface SavedStrategy {
 interface LoadedStrategy extends Partial<Omit<SavedStrategy, 'groups'>> { groups?: AttackGroup[] }
 const STORAGE_KEY = 'specscape.speedrun.strategy.v1';
 const MAX_ATTACKS = 30;
-const freshGroup = (): AttackGroup => ({ id: crypto.randomUUID(), count: 1, specId: null, setup: null, downtimeSeconds: 0, editing: false });
+const freshGroup = (): AttackGroup => ({ id: crypto.randomUUID(), count: 1, useSpec: false, setup: null, downtimeSeconds: 0, editing: false });
 const chance = (value: number) => `${(value * 100).toFixed(value < .01 && value > 0 ? 3 : 1)}%`;
+const specForWeapon = (weaponName: string | undefined, specs: SpecAttack[]): SpecAttack | undefined =>
+  weaponName ? specs.find((spec) => weaponName === spec.def.item || weaponName.startsWith(`${spec.def.item} (`)) : undefined;
+const downloadJson = (name: string, data: unknown) => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
+};
 const readStrategy = (equipment: Equip[]): LoadedStrategy | null => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -48,27 +54,54 @@ const readStrategy = (equipment: Equip[]): LoadedStrategy | null => {
     const rawGroups = saved.groups ?? saved.steps ?? [];
     if (!Array.isArray(rawGroups)) return null;
     const groups = rawGroups.slice(0, MAX_ATTACKS).map((group) => {
-      const legacy = group as StoredGroup & { gearOverride?: Partial<Record<Slot, ItemRef>> | null; styleIndex?: number | null };
+      const legacy = group as StoredGroup & { specId?: string | null; gearOverride?: Partial<Record<Slot, ItemRef>> | null; styleIndex?: number | null };
       const setup = legacy.setup
         ? { ...legacy.setup, gear: refsToGear(legacy.setup.gear, equipment) }
         : legacy.gearOverride ? { gear: refsToGear(legacy.gearOverride, equipment), styleIndex: legacy.styleIndex ?? 0, prayerKey: 'piety', potionId: 'super_combat', spellName: '' } : null;
-      return { ...group, count: Math.max(1, group.count ?? 1), setup, downtimeSeconds: group.downtimeSeconds ?? 0, editing: false } as AttackGroup;
+      return { ...group, useSpec: legacy.useSpec ?? !!legacy.specId, count: Math.max(1, group.count ?? 1), setup,
+        downtimeSeconds: group.downtimeSeconds ?? 0, editing: false } as AttackGroup;
     });
     return { ...saved, killOverheadSeconds: saved.killOverheadSeconds ?? (saved as Partial<SavedStrategy> & { downtimeSeconds?: number }).downtimeSeconds,
       groups: groups.length ? groups : [freshGroup()] };
   } catch { return null; }
 };
 
-export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSetup, itemsBySlot, equipment, specs,
+export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot, equipment, specs,
   specOptions, startEnergy, lightbearer, buildAttack, makePreset }: Props) {
-  const saved = useMemo(() => readStrategy(equipment), [equipment]);
-  const [groups, setGroups] = useState<AttackGroup[]>(() => saved?.groups ?? Array.from({ length: 3 }, freshGroup));
-  const [trials, setTrials] = useState(saved?.trials ?? 20000);
-  const [targetSeconds, setTargetSeconds] = useState(saved?.targetSeconds ?? 0);
-  const [killOverheadSeconds, setKillOverheadSeconds] = useState(saved?.killOverheadSeconds ?? 0);
-  const [resetSeconds, setResetSeconds] = useState(saved?.resetSeconds ?? 10);
+  const [groups, setGroups] = useState<AttackGroup[]>([]);
+  const [trials, setTrials] = useState(20000);
+  const [targetSeconds, setTargetSeconds] = useState(0);
+  const [killOverheadSeconds, setKillOverheadSeconds] = useState(0);
+  const [resetSeconds, setResetSeconds] = useState(10);
   const [result, setResult] = useState<SequenceResult | null>(null);
   const [running, setRunning] = useState(false);
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (!equipment.length || initialized.current) return;
+    const saved = readStrategy(equipment);
+    const isOldBlankDefault = saved?.groups?.length === 5 && saved.groups.every((g) => !g.useSpec && !g.setup && g.count === 1);
+    if (!saved || isOldBlankDefault) {
+      const mage = makePreset('max_magic_shadow');
+      const tome = equipment.find((item) => item.name === "Zorya's tome" && item.slot === 'weapon');
+      const melee = makePreset('max_melee_scythe');
+      const halberd = equipment.find((item) => item.name === 'Crystal halberd' && item.slot === 'weapon');
+      if (tome) mage.gear.weapon = tome;
+      if (halberd) melee.gear.weapon = halberd;
+      mage.styleIndex = defaultStyleIndex(stylesForCategory(mage.gear.weapon?.category));
+      melee.styleIndex = defaultStyleIndex(stylesForCategory(melee.gear.weapon?.category));
+      setGroups([
+        { ...freshGroup(), count: 2, useSpec: true, setup: mage },
+        { ...freshGroup(), useSpec: true, setup: melee },
+      ]);
+    } else setGroups(saved.groups ?? [freshGroup()]);
+    if (saved && !isOldBlankDefault) {
+      setTrials(saved.trials ?? 20000);
+      setTargetSeconds(saved.targetSeconds ?? 0);
+      setKillOverheadSeconds(saved.killOverheadSeconds ?? 0);
+      setResetSeconds(saved.resetSeconds ?? 10);
+    }
+    initialized.current = true;
+  }, [equipment, makePreset]);
   const attackCount = groups.reduce((sum, group) => sum + group.count, 0);
 
   useEffect(() => {
@@ -85,7 +118,7 @@ export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSe
   groups.forEach((group) => {
     const setup = group.setup ?? baseSetup;
     for (let index = 0; index < group.count; index++) {
-      const attack = buildAttack(setup, group.specId);
+      const attack = buildAttack(setup, group.useSpec);
       if (attack) resolved.push({ ...attack, id: `${group.id}-${index}`,
         downtimeAfterTicks: generatedIndex === attackCount - 1 ? 0 : Math.round(group.downtimeSeconds / .6) });
       generatedIndex++;
@@ -115,7 +148,18 @@ export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSe
   return <section className="panel sequence-odds">
     <div className="sequence-heading"><div><h2>Speedrun odds</h2>
       <p className="help-text">Build a repeatable attack sequence for {monster?.name ?? 'the selected boss'}.</p></div>
-      <span className="fact">{attackCount} attacks · {energyRequired}% total spec cost</span></div>
+      <div className="sequence-heading-actions"><span className="fact">{attackCount} attacks · {energyRequired}% total spec cost</span>
+        <button className="mini" onClick={() => downloadJson('speedrun-loadout.json', {
+          schema: 'specscape.speedrun-loadout.v1', exportedAt: new Date().toISOString(),
+          boss: monster ? { name: monster.name, version: monster.version } : null,
+          baseLoadout: { gear: gearToRefs(baseSetup.gear), styleIndex: baseSetup.styleIndex,
+            prayerKey: baseSetup.prayerKey, potionId: baseSetup.potionId, spellName: baseSetup.spellName },
+          strategy: groups.map((group) => ({ count: group.count, useSpec: group.useSpec,
+            setup: group.setup ? { ...group.setup, gear: gearToRefs(group.setup.gear) } : null,
+            downtimeSeconds: group.downtimeSeconds })),
+          trials, targetSeconds, killOverheadSeconds, resetSeconds,
+        })}>Export Speedrun loadout</button>
+      </div></div>
     {!monster && <div className="warn">Choose a boss in SpecScape to simulate a sequence.</div>}
 
     <div className="sequence-presets"><span>Quick add:</span>
@@ -130,7 +174,8 @@ export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSe
         const gear = setup.gear;
         const styles = stylesForCategory(gear.weapon?.category);
         const styleIndex = Math.min(setup.styleIndex, styles.length - 1);
-        const attack = buildAttack(setup, group.specId);
+        const attack = buildAttack(setup, group.useSpec);
+        const weaponSpec = specForWeapon(gear.weapon?.name, specs);
         const customItems = new Map(itemsBySlot); customItems.set('ammo', ammoFor(gear.weapon, itemsBySlot.get('ammo') ?? []));
         const drag = { index };
         return <div className="sequence-action-card" key={group.id} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(index)); event.dataTransfer.effectAllowed = 'move'; }}
@@ -140,10 +185,10 @@ export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSe
               <span className="sequence-drag" title="Drag to reorder">⠿</span><b>{String(index + 1).padStart(2, '0')}</b>
               <span className="sequence-weapon" title={gear.weapon?.name ?? 'Unarmed'}>{gear.weapon?.name ?? 'Unarmed'}</span>
               <label className="sequence-count-control"><span>Attacks</span><input type="number" min={1} max={MAX_ATTACKS} value={group.count} onChange={(event) => setCount(index, Number(event.target.value))} /></label>
-              <label className="sequence-spec-toggle"><input type="checkbox" checked={group.specId !== null} onChange={(event) => updateGroup(index, { specId: event.target.checked ? group.specId ?? specs[0]?.id ?? null : null })} />Use spec</label>
-              {group.specId ? <select aria-label={`Special attack for loadout ${index + 1}`} value={group.specId} onChange={(event) => updateGroup(index, { specId: event.target.value })}>
-                {specs.map((spec) => <option key={spec.id} value={spec.id}>{spec.def.name} ({spec.def.cost}%)</option>)}
-              </select> : <span className="sequence-regular">Regular attack</span>}
+              <label className="sequence-spec-toggle"><input type="checkbox" checked={group.useSpec} disabled={!weaponSpec}
+                title={weaponSpec ? `Use ${weaponSpec.def.name} special` : 'No modeled special attack for this weapon'}
+                onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} />Use spec{group.useSpec && weaponSpec ? ` · ${weaponSpec.def.name}` : ''}</label>
+              {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
               <span className="sequence-detail">{attack?.load.maxHit ?? 0} max · {attack?.load.speed ?? 0} ticks</span>
             </div>
             <div className="sequence-action-buttons">
@@ -163,7 +208,9 @@ export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSe
               {styles.map((style, i) => <option key={`${style.name}-${i}`} value={i}>{style.name} ({style.stance})</option>)}</select></label>
             <GearGrid gear={gear} itemsBySlot={customItems} onChange={(slot, item) => {
               const nextGear = { ...gear, [slot]: item }; const nextStyles = stylesForCategory(nextGear.weapon?.category);
-              updateGroup(index, { setup: { ...setup, gear: nextGear, styleIndex: slot === 'weapon' ? defaultStyleIndex(nextStyles) : styleIndex } });
+              const weaponHasSpec = !!specForWeapon(nextGear.weapon?.name, specs);
+              updateGroup(index, { setup: { ...setup, gear: nextGear, styleIndex: slot === 'weapon' ? defaultStyleIndex(nextStyles) : styleIndex },
+                ...(slot === 'weapon' && !weaponHasSpec ? { useSpec: false } : {}) });
             }} attackType={attack?.load.type ?? 'melee'} targetAttributes={monster?.attributes ?? []} />
           </div>}
         </div>;

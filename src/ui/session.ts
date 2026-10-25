@@ -14,7 +14,7 @@ import type { ItemRef, SpecSwitches } from './setups';
 const KEY = 'specscape.session.v1';
 
 /** What a first-time visitor sees: the boss most people are actually killing. */
-export const DEFAULT_MONSTER = 'Vorkath (Post-quest)';
+export const DEFAULT_MONSTER = 'Zulrah (Serpentine)';
 export const DEFAULT_PRESET = 'max_melee_fang';
 
 export interface TabStateRaw {

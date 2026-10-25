@@ -24,6 +24,7 @@ const POWERED_STAVES: [RegExp, (magicLevel: number) => number][] = [
   [/^Trident of the Seas/i, (l) => Math.trunc(l / 3) - 5],
   [/^Accursed sceptre/i, (l) => Math.trunc(l / 3) - 6],
   [/^Eye of Ayak/i, (l) => Math.trunc(l / 3) - 6],
+  [/^Zorya's tome/i, (l) => Math.trunc(l / 3) - 15],
   [/^Thammaron's sceptre/i, (l) => Math.trunc(l / 3) - 8],
   [/^Warped sceptre/i, (l) => Math.trunc((8 * l + 96) / 37)],
   [/^Crystal staff \(basic\)|^Corrupted staff \(basic\)/i, () => 23],

@@ -7,6 +7,7 @@ export interface SequenceAttack {
   id: string;
   label: string;
   load: Loadout;
+  weaponName?: string;
   spec?: SpecDef;
   downtimeAfterTicks?: number;
 }
@@ -46,23 +47,32 @@ const attempt = (args: {
   let energy = args.startEnergy;
   let regenCounter = args.lightbearer ? 25 : 50;
   let elapsed = 0;
+  let zoryaEmpoweredAttacks = 0;
   for (let i = 0; i < Math.min(cutoff, actions.length); i++) {
     const action = actions[i];
     const spec = action.spec;
     if (spec && energy < spec.cost) break;
     if (spec) energy -= spec.cost;
+    const zoryaEmpowered = zoryaEmpoweredAttacks > 0 && action.weaponName === "Zorya's tome";
+    if (zoryaEmpowered) zoryaEmpoweredAttacks--;
+    const attackSpeed = zoryaEmpowered ? 2 : action.load.speed;
     if (!spec) {
-      if (rng() < accuracy(action.load, monster, state)) state.hp -= Math.min(state.hp, randInt(rng, 0, action.load.maxHit));
+      const hitLoad = zoryaEmpowered ? { ...action.load, maxHit: Math.floor(action.load.maxHit * 1.6) } : action.load;
+      if (rng() < accuracy(hitLoad, monster, state, zoryaEmpowered ? { accuracyMultiplier: 2.5 } : {})) {
+        state.hp -= Math.min(state.hp, randInt(rng, 0, hitLoad.maxHit));
+      }
     } else {
+      let specHit = false;
       const acc = spec.guaranteed ? 1 : accuracy(action.load, monster, state, { styleOverride: spec.defStyle, accuracyMultiplier: spec.accMult });
       const ctx: SpecCtx = { load: action.load, acc, rng, state, monsterName: monster.name,
-        isDemon: monster.attributes.includes('demon'), options: args.specOptions };
+        isDemon: monster.attributes.includes('demon'), options: args.specOptions, onHit: () => { specHit = true; } };
       for (const damage of spec.hits(ctx, spec.maxHit(action.load.maxHit))) {
         if (state.hp <= 0) break;
         state.hp -= Math.min(state.hp, damage);
       }
+      if (spec.id === 'zorya_tome' && specHit) zoryaEmpoweredAttacks = 3;
     }
-    elapsed += action.load.speed;
+    elapsed += attackSpeed;
     if (state.hp <= 0) return { killed: true, ticks: elapsed };
     const pause = i + 1 < Math.min(cutoff, actions.length)
       ? Math.max(0, Math.floor(action.downtimeAfterTicks ?? 0)) : 0;
@@ -73,7 +83,7 @@ const attempt = (args: {
         regenCounter = args.lightbearer ? 25 : 50;
       }
     }
-    for (let tick = 0; tick < action.load.speed; tick++) {
+    for (let tick = 0; tick < attackSpeed; tick++) {
       if (energy < 100 && --regenCounter <= 0) {
         energy = Math.min(100, energy + 10);
         regenCounter = args.lightbearer ? 25 : 50;

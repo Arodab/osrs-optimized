@@ -68,6 +68,7 @@ body {
 .speedrun-page .sequence-odds { min-height: 250px; }
 .speedrun-page .sequence-controls { align-items: end; }
 .speedrun-loadout-heading, .panel-title-row, .sequence-setup-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.panel-title-actions, .sequence-heading-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .speedrun-loadout-heading h2 { margin-bottom: 2px; }
 .speedrun-loadout-heading p { margin: 0; }
 .speedrun-preset { width: min(360px, 42%); margin: 0; }
@@ -206,6 +207,7 @@ header p {
   .sidebar-collapse { margin-top: 12px; }
   .speedrun-context { align-items: flex-start; flex-direction: column; }
   .speedrun-loadout-heading, .panel-title-row { align-items: flex-start; flex-direction: column; }
+  .panel-title-actions, .sequence-heading-actions { align-items: flex-start; width: 100%; }
   .speedrun-preset { width: 100%; }
   .speedrun-loadout-controls { grid-template-columns: 1fr; }
   .speedrun-loadout-options { grid-template-columns: 1fr; }

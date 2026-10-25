@@ -36,6 +36,10 @@ import equipmentData from '../public/data/equipment.json';
 import spellsData from '../public/data/spells.json';
 
 const monsterLabel = (m: Monster) => (m.version ? `${m.name} (${m.version})` : m.name);
+const downloadJson = (name: string, data: unknown) => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
+};
 
 /**
  * Drop spec ids that no longer exist. Saved sessions and share codes outlive
@@ -91,6 +95,16 @@ const presetTab = (id: string, equipment: Equip[]): LoadoutTab => {
   };
 };
 
+const defaultSpeedrunTab = (equipment: Equip[]): LoadoutTab => {
+  const tab = presetTab('max_magic_shadow', equipment);
+  const tome = equipment.find((item) => item.name === "Zorya's tome" && item.slot === 'weapon');
+  if (tome) {
+    tab.gear = { ...tab.gear, weapon: tome };
+    tab.styleIndex = defaultStyleIndex(stylesFor(tab.gear));
+  }
+  return tab;
+};
+
 export default function App() {
   const [activePage, setActivePage] = useState<'specscape' | 'speedrun'>('specscape');
   const [navCollapsed, setNavCollapsed] = useState(false);
@@ -141,7 +155,7 @@ export default function App() {
     magic: { gear: {}, presetId: 'max_magic_shadow', prayerKey: 'augury', styleIndex: 0, potionId: 'imbued_heart', spellName: '' },
   });
   const [speedrunLoadout, setSpeedrunLoadout] = useState<LoadoutTab>({
-    gear: {}, presetId: 'max_melee_scythe', prayerKey: 'piety', styleIndex: 0, potionId: 'super_combat', spellName: '',
+    gear: {}, presetId: 'max_magic_shadow', prayerKey: 'augury', styleIndex: 0, potionId: 'imbued_heart', spellName: '',
   });
   const [sharedSlots, setSharedSlots] = useState<Set<Slot>>(new Set());
   
@@ -322,20 +336,22 @@ export default function App() {
 
   const buildSpeedrunAttack = useCallback((
     sequenceSetup: SequenceSetup,
-    specId: string | null,
+    useSpec: boolean,
   ): SequenceAttack | null => {
     const attackSetup = { ...speedrunSetup, ...sequenceSetup, spell: spells.find((s) => s.name === sequenceSetup.spellName) ?? null };
-    if (!specId) {
+    const equippedWeaponName = sequenceSetup.gear.weapon?.name ?? '';
+    const def = useSpec ? SPECS.find((candidate) => candidate.item === equippedWeaponName || equippedWeaponName.startsWith(`${candidate.item} (`)) : undefined;
+    if (!useSpec) {
       const load = buildMain(attackSetup, firstEncounterMonster);
-      return { id: 'main', label: `Regular attack (${load.name})`, load };
+      return { id: 'main', label: `Regular attack (${load.name})`, load, weaponName: equippedWeaponName };
     }
-    const def = specById(specId);
     const weapon = def ? specWeaponItem(def, equipment) : null;
     if (!def || !weapon) return null;
     return {
-      id: specId,
+      id: def.id,
       label: `${def.name} spec (${def.cost}%)`,
       load: buildSpecLoadout(attackSetup, def, weapon, firstEncounterMonster),
+      weaponName: equippedWeaponName,
       spec: def,
     };
   }, [speedrunSetup, firstEncounterMonster, equipment, spells]);
@@ -416,12 +432,15 @@ export default function App() {
         ranged: buildTabFromPreset('max_ranged_tbow'),
         magic: buildTabFromPreset('max_magic_shadow'),
       });
-      setSpeedrunLoadout(presetTab('max_melee_scythe', equipment));
+      setSpeedrunLoadout(defaultSpeedrunTab(equipment));
       setReady(true);
       return;
     }
 
-    setEncounters(prev.encounters ?? [{ id: crypto.randomUUID(), monsterId: prev.monsterQuery ?? DEFAULT_MONSTER, styleTab: 'melee', count: 1, downtimeSeconds: 0 }]);
+    const restoredEncounters = prev.encounters?.length === 1 && prev.encounters[0].monsterId === 'Vorkath (Post-quest)'
+      ? [{ ...prev.encounters[0], monsterId: DEFAULT_MONSTER }]
+      : prev.encounters;
+    setEncounters(restoredEncounters ?? [{ id: crypto.randomUUID(), monsterId: prev.monsterQuery ?? DEFAULT_MONSTER, styleTab: 'melee', count: 1, downtimeSeconds: 0 }]);
     
     if (prev.tabs && prev.activeTab) {
       setTabs({
@@ -436,9 +455,14 @@ export default function App() {
       const tab = { gear: g, prayerKey: prev.prayerKey || 'none', styleIndex: prev.styleIndex ?? 0, potionId: prev.potionId || 'none', spellName: prev.spellName || '', presetId: prev.presetId || '' };
       setTabs({ melee: tab, ranged: tab, magic: tab });
     }
-    setSpeedrunLoadout(prev.speedrunLoadout
+    const restoredSpeedrunLoadout = prev.speedrunLoadout
       ? { ...prev.speedrunLoadout, gear: refsToGear(prev.speedrunLoadout.gear, equipment) }
-      : presetTab('max_melee_scythe', equipment));
+      : null;
+    const wasUnchangedOldSpeedrunDefault = restoredSpeedrunLoadout?.presetId === 'max_melee_scythe'
+      && restoredSpeedrunLoadout.gear.weapon?.name === 'Scythe of Vitur';
+    setSpeedrunLoadout(!restoredSpeedrunLoadout || wasUnchangedOldSpeedrunDefault
+      ? defaultSpeedrunTab(equipment)
+      : restoredSpeedrunLoadout);
 
     if (prev.levels) setLevels(prev.levels);
     setBuffs(prev.buffs ?? DEFAULT_BUFFS);
@@ -827,6 +851,18 @@ export default function App() {
     startEnergy, kills, bankingSeconds, compareLightbearer,
   });
 
+  const exportSpecScapeLoadout = () => {
+    const active = tabs[activeTab];
+    downloadJson('specscape-loadout.json', {
+      schema: 'specscape.loadout.v1', exportedAt: new Date().toISOString(),
+      bossSequence: encounters,
+      activeStyle: activeTab,
+      loadout: { gear: gearToRefs(active.gear), prayerKey: active.prayerKey, styleIndex: active.styleIndex,
+        potionId: active.potionId, spellName: active.spellName },
+      levels, buffs, enabledSpecs: [...enabled], specOptions,
+    });
+  };
+
   const doCopyCode = async () => {
     const code = encodeSetup(currentShareable(), equipment);
     setShareCode(code);
@@ -1030,7 +1066,6 @@ export default function App() {
         <SequenceOdds
           monster={firstEncounterMonster}
           baseGear={speedrunLoadout.gear}
-          baseStyleIndex={speedrunLoadout.styleIndex}
           baseSetup={{ ...speedrunLoadout, spellName: speedrunLoadout.spellName }}
           itemsBySlot={itemsBySlot}
           equipment={equipment}
@@ -1225,7 +1260,10 @@ export default function App() {
           <section className="panel">
             <div className="panel-title-row">
               <h2>Your normal setup</h2>
-              <button className="mini" type="button" onClick={importSpeedrunLoadout}>Import Speedrun loadout</button>
+              <div className="panel-title-actions">
+                <button className="mini" type="button" onClick={exportSpecScapeLoadout}>Export SpecScape loadout</button>
+                <button className="mini" type="button" onClick={importSpeedrunLoadout}>Import Speedrun loadout</button>
+              </div>
             </div>
             <div className="tab-bar">
               {(['melee', 'ranged', 'magic'] as const).map(t => (

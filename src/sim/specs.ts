@@ -25,6 +25,8 @@ export interface SpecCtx {
   isDemon: boolean;
   /** Per-spec toggles, keyed by SpecDef.option.key. */
   options: Record<string, boolean>;
+  /** Called when one of this spec's accuracy rolls succeeds. */
+  onHit?: () => void;
 }
 
 export interface SpecDef {
@@ -77,7 +79,11 @@ const reduceDef = (ctx: SpecCtx, next: (cur: number) => number): void => {
   ctx.state.def = Math.max(floor, next(ctx.state.def));
 };
 
-const rollHit = (ctx: SpecCtx): boolean => ctx.rng() < ctx.acc;
+const rollHit = (ctx: SpecCtx): boolean => {
+  const hit = ctx.rng() < ctx.acc;
+  if (hit) ctx.onHit?.();
+  return hit;
+};
 const uniformDamage = (ctx: SpecCtx, max: number): number => randInt(ctx.rng, 0, max);
 
 /** Standard single-hit spec: one accuracy roll, uniform 0..max damage. */
@@ -464,6 +470,19 @@ export const SPECS: SpecDef[] = [
       ctx.state.magic = factor(ctx.state.magic, 17, 20);
       return [uniformDamage(ctx, specMax)];
     },
+  },
+  {
+    id: 'zorya_tome',
+    name: "Zorya's tome",
+    item: "Zorya's tome",
+    cost: 50,
+    speed: 3,
+    type: 'magic',
+    defStyle: 'magic',
+    accMult: 2.5,
+    note: '150% increased accuracy and 60% increased damage; a successful spec empowers the next three tome attacks at 2-tick speed.',
+    maxHit: (base) => factor(base, 8, 5),
+    hits: singleHit,
   },
   {
     id: 'arkan',
