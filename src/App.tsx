@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GearGrid, { ItemIcon, itemLabel } from './ui/GearGrid';
 import SwitchesModal, { type SwitchPreview } from './ui/SwitchesModal';
 import DistributionModal from './ui/DistributionModal';
-import SequenceOdds from './ui/SequenceOdds';
+import SequenceOdds, { type SequenceSetup } from './ui/SequenceOdds';
 import {
   SLOTS, DEFAULT_AMMO, ammoFor, ammoKindFor, pickVariant,
   type Equip, type GearSet, type Slot,
@@ -321,11 +321,10 @@ export default function App() {
   );
 
   const buildSpeedrunAttack = useCallback((
-    attackGear: GearSet,
-    attackStyleIndex: number,
+    sequenceSetup: SequenceSetup,
     specId: string | null,
   ): SequenceAttack | null => {
-    const attackSetup = { ...speedrunSetup, gear: attackGear, styleIndex: attackStyleIndex };
+    const attackSetup = { ...speedrunSetup, ...sequenceSetup, spell: spells.find((s) => s.name === sequenceSetup.spellName) ?? null };
     if (!specId) {
       const load = buildMain(attackSetup, firstEncounterMonster);
       return { id: 'main', label: `Regular attack (${load.name})`, load };
@@ -339,7 +338,7 @@ export default function App() {
       load: buildSpecLoadout(attackSetup, def, weapon, firstEncounterMonster),
       spec: def,
     };
-  }, [speedrunSetup, firstEncounterMonster, equipment]);
+  }, [speedrunSetup, firstEncounterMonster, equipment, spells]);
 
   const applyPreset = useCallback((id: string, targetTab?: TabKind) => {
     const preset = PRESETS.find((p) => p.id === id);
@@ -1032,6 +1031,7 @@ export default function App() {
           monster={firstEncounterMonster}
           baseGear={speedrunLoadout.gear}
           baseStyleIndex={speedrunLoadout.styleIndex}
+          baseSetup={{ ...speedrunLoadout, spellName: speedrunLoadout.spellName }}
           itemsBySlot={itemsBySlot}
           equipment={equipment}
           specs={speedrunSpecs}
@@ -1039,6 +1039,10 @@ export default function App() {
           startEnergy={startEnergy}
           lightbearer={speedrunLoadout.gear.ring?.name === 'Lightbearer'}
           buildAttack={buildSpeedrunAttack}
+          makePreset={(id) => {
+            const preset = presetTab(id, equipment);
+            return { ...preset, spellName: preset.spellName };
+          }}
         />
       </main>
 

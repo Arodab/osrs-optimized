@@ -8,264 +8,183 @@ import type { SpecDef } from '../sim/specs';
 import { gearToRefs, refsToGear, type ItemRef } from './setups';
 import { simulateSequence } from '../sim/sequence';
 
-interface SpecAttack {
-  id: string;
-  def: SpecDef;
+export interface SequenceSetup {
+  gear: GearSet;
+  styleIndex: number;
+  prayerKey: string;
+  potionId: string;
+  spellName: string;
 }
-
-interface AttackStep {
-  id: string;
-  specId: string | null;
-  /** null means inherit the Speedrun page's independent default setup. */
-  gearOverride: GearSet | null;
-  styleIndex: number | null;
-  editing: boolean;
+interface SpecAttack { id: string; def: SpecDef }
+interface AttackGroup {
+  id: string; count: number; specId: string | null; setup: SequenceSetup | null;
+  downtimeSeconds: number; editing: boolean;
 }
-
 interface Props {
-  monster: Monster | null;
-  baseGear: GearSet;
-  baseStyleIndex: number;
-  itemsBySlot: Map<Slot, Equip[]>;
-  equipment: Equip[];
-  specs: SpecAttack[];
-  specOptions: Record<string, boolean>;
-  startEnergy: number;
-  lightbearer: boolean;
-  buildAttack: (gear: GearSet, styleIndex: number, specId: string | null) => SequenceAttack | null;
+  monster: Monster | null; baseGear: GearSet; baseStyleIndex: number;
+  baseSetup: SequenceSetup;
+  itemsBySlot: Map<Slot, Equip[]>; equipment: Equip[]; specs: SpecAttack[];
+  specOptions: Record<string, boolean>; startEnergy: number; lightbearer: boolean;
+  buildAttack: (setup: SequenceSetup, specId: string | null) => SequenceAttack | null;
+  makePreset: (id: string) => SequenceSetup;
 }
-
-interface StoredAttackStep {
-  id: string;
-  specId: string | null;
-  gearOverride: Partial<Record<Slot, ItemRef>> | null;
-  styleIndex: number | null;
-  editing: boolean;
+interface StoredGroup extends Omit<AttackGroup, 'setup'> {
+  setup: (Omit<SequenceSetup, 'gear'> & { gear: Partial<Record<Slot, ItemRef>> }) | null;
 }
-
 interface SavedStrategy {
-  steps: StoredAttackStep[];
-  trials: number;
-  targetSeconds: number;
-  downtimeSeconds: number;
+  groups: StoredGroup[]; trials: number; targetSeconds: number;
+  killOverheadSeconds: number; resetSeconds: number;
 }
-
-interface LoadedStrategy extends Partial<Omit<SavedStrategy, 'steps'>> {
-  steps?: AttackStep[];
-}
-
+interface LoadedStrategy extends Partial<Omit<SavedStrategy, 'groups'>> { groups?: AttackGroup[] }
 const STORAGE_KEY = 'specscape.speedrun.strategy.v1';
 const MAX_ATTACKS = 30;
-const newStep = (): AttackStep => ({ id: crypto.randomUUID(), specId: null, gearOverride: null, styleIndex: null, editing: false });
-
+const freshGroup = (): AttackGroup => ({ id: crypto.randomUUID(), count: 1, specId: null, setup: null, downtimeSeconds: 0, editing: false });
+const chance = (value: number) => `${(value * 100).toFixed(value < .01 && value > 0 ? 3 : 1)}%`;
 const readStrategy = (equipment: Equip[]): LoadedStrategy | null => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw) as Partial<SavedStrategy>;
-    if (!Array.isArray(saved.steps)) return null;
-    const steps = saved.steps.slice(0, MAX_ATTACKS).map((step) => ({
-      ...step,
-      gearOverride: step.gearOverride ? refsToGear(step.gearOverride, equipment) : null,
-      editing: false,
-    }));
-    return { ...saved, steps: steps.length ? steps as AttackStep[] : [newStep()] };
-  } catch {
-    return null;
-  }
+    const saved = JSON.parse(raw) as Partial<SavedStrategy> & { steps?: StoredGroup[] };
+    const rawGroups = saved.groups ?? saved.steps ?? [];
+    if (!Array.isArray(rawGroups)) return null;
+    const groups = rawGroups.slice(0, MAX_ATTACKS).map((group) => {
+      const legacy = group as StoredGroup & { gearOverride?: Partial<Record<Slot, ItemRef>> | null; styleIndex?: number | null };
+      const setup = legacy.setup
+        ? { ...legacy.setup, gear: refsToGear(legacy.setup.gear, equipment) }
+        : legacy.gearOverride ? { gear: refsToGear(legacy.gearOverride, equipment), styleIndex: legacy.styleIndex ?? 0, prayerKey: 'piety', potionId: 'super_combat', spellName: '' } : null;
+      return { ...group, count: Math.max(1, group.count ?? 1), setup, downtimeSeconds: group.downtimeSeconds ?? 0, editing: false } as AttackGroup;
+    });
+    return { ...saved, groups: groups.length ? groups : [freshGroup()] };
+  } catch { return null; }
 };
 
-const chance = (value: number) => `${(value * 100).toFixed(value < 0.01 && value > 0 ? 3 : 1)}%`;
-const seconds = (ticks: number | null, downtime = 0) => ticks === null ? 'No kills' : `${(ticks * 0.6 + downtime).toFixed(2)}s`;
-
-export default function SequenceOdds({
-  monster, baseGear, baseStyleIndex, itemsBySlot, equipment, specs,
-  specOptions, startEnergy, lightbearer, buildAttack,
-}: Props) {
+export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSetup, itemsBySlot, equipment, specs,
+  specOptions, startEnergy, lightbearer, buildAttack, makePreset }: Props) {
   const saved = useMemo(() => readStrategy(equipment), [equipment]);
-  const [actions, setActions] = useState<AttackStep[]>(() => saved?.steps as AttackStep[] ?? Array.from({ length: 5 }, newStep));
+  const [groups, setGroups] = useState<AttackGroup[]>(() => saved?.groups ?? Array.from({ length: 3 }, freshGroup));
   const [trials, setTrials] = useState(saved?.trials ?? 20000);
   const [targetSeconds, setTargetSeconds] = useState(saved?.targetSeconds ?? 0);
-  const [downtimeSeconds, setDowntimeSeconds] = useState(saved?.downtimeSeconds ?? 0);
+  const [killOverheadSeconds, setKillOverheadSeconds] = useState(saved?.killOverheadSeconds ?? 0);
+  const [resetSeconds, setResetSeconds] = useState(saved?.resetSeconds ?? 10);
   const [result, setResult] = useState<SequenceResult | null>(null);
   const [running, setRunning] = useState(false);
+  const attackCount = groups.reduce((sum, group) => sum + group.count, 0);
 
   useEffect(() => {
     try {
-      const strategy: SavedStrategy = {
-        steps: actions.map((step) => ({
-          ...step,
-          gearOverride: step.gearOverride ? gearToRefs(step.gearOverride) : null,
-        })),
-        trials,
-        targetSeconds,
-        downtimeSeconds,
-      };
+      const strategy: SavedStrategy = { groups: groups.map((group) => ({ ...group,
+        setup: group.setup ? { ...group.setup, gear: gearToRefs(group.setup.gear) } : null,
+      })), trials, targetSeconds, killOverheadSeconds, resetSeconds };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(strategy));
-    } catch {
-      // The simulator remains usable when browser storage is unavailable.
+    } catch { /* browser storage is optional */ }
+  }, [groups, trials, targetSeconds, killOverheadSeconds, resetSeconds]);
+
+  const resolved: SequenceAttack[] = [];
+  let generatedIndex = 0;
+  groups.forEach((group) => {
+    const setup = group.setup ?? baseSetup;
+    for (let index = 0; index < group.count; index++) {
+      const attack = buildAttack(setup, group.specId);
+      if (attack) resolved.push({ ...attack, id: `${group.id}-${index}`,
+        downtimeAfterTicks: generatedIndex === attackCount - 1 ? 0 : Math.round(group.downtimeSeconds / .6) });
+      generatedIndex++;
     }
-  }, [actions, trials, targetSeconds, downtimeSeconds]);
-
-  const resolved = actions.map((step) => buildAttack(
-    step.gearOverride ?? baseGear,
-    step.styleIndex ?? baseStyleIndex,
-    step.specId,
-  )).filter((attack): attack is SequenceAttack => !!attack);
+  });
   const energyRequired = resolved.reduce((sum, attack) => sum + (attack.spec?.cost ?? 0), 0);
-
-  const updateStep = (index: number, update: Partial<AttackStep>) => {
-    setActions((current) => current.map((step, i) => i === index ? { ...step, ...update } : step));
-    setResult(null);
+  const updateGroup = (index: number, update: Partial<AttackGroup>) => {
+    setGroups((current) => current.map((group, i) => i === index ? { ...group, ...update } : group)); setResult(null);
   };
-
-  const setAttackCount = (count: number) => {
-    const bounded = Math.max(1, Math.min(MAX_ATTACKS, Math.floor(count) || 1));
-    setActions((current) => current.length === bounded
-      ? current
-      : current.length > bounded
-        ? current.slice(0, bounded)
-        : [...current, ...Array.from({ length: bounded - current.length }, newStep)]);
-    setResult(null);
+  const setCount = (index: number, count: number) => {
+    const others = groups.reduce((sum, g, i) => sum + (i === index ? 0 : g.count), 0);
+    updateGroup(index, { count: Math.max(1, Math.min(MAX_ATTACKS - others, Math.floor(count) || 1)) });
   };
-
+  const reorder = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= groups.length) return;
+    setGroups((current) => { const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); setResult(null);
+  };
   const run = () => {
     if (!monster || !resolved.length || running) return;
     setRunning(true);
     window.setTimeout(() => {
-      setResult(simulateSequence({
-        monster, actions: resolved, trials, startEnergy, lightbearer,
-        specOptions, targetSeconds, downtimeSeconds,
-      }));
-      setRunning(false);
+      setResult(simulateSequence({ monster, actions: resolved, trials, startEnergy, lightbearer, specOptions,
+        targetSeconds, downtimeSeconds: killOverheadSeconds, resetSeconds })); setRunning(false);
     }, 0);
   };
 
-  return (
-    <section className="panel sequence-odds">
-      <div className="sequence-heading">
-        <div>
-          <h2>Speedrun odds</h2>
-          <p className="help-text">Choose the attack count, special attacks, and gear switches for {monster?.name ?? 'the selected boss'}.</p>
-        </div>
-        <span className="fact">{actions.length} attacks · {energyRequired}% total spec cost</span>
-      </div>
+  return <section className="panel sequence-odds">
+    <div className="sequence-heading"><div><h2>Speedrun odds</h2>
+      <p className="help-text">Build a repeatable attack sequence for {monster?.name ?? 'the selected boss'}.</p></div>
+      <span className="fact">{attackCount} attacks · {energyRequired}% total spec cost</span></div>
+    {!monster && <div className="warn">Choose a boss in SpecScape to simulate a sequence.</div>}
 
-      {!monster && <div className="warn">Choose a boss in SpecScape to simulate a sequence.</div>}
+    <div className="sequence-presets"><span>Quick add:</span>
+      <button className="mini" onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_melee_scythe') }]); setResult(null); }}>Max melee</button>
+      <button className="mini" onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_ranged_tbow') }]); setResult(null); }}>Max ranged</button>
+      <button className="mini" onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_magic_shadow') }]); setResult(null); }}>Max mage</button>
+    </div>
 
-      <div className="sequence-actions">
-        {actions.map((step, index) => {
-          const attackGear = step.gearOverride ?? baseGear;
-          const styleOptions = stylesForCategory(attackGear.weapon?.category);
-          const styleIndex = Math.min(step.styleIndex ?? baseStyleIndex, styleOptions.length - 1);
-          const attack = buildAttack(attackGear, styleIndex, step.specId);
-          const customItems = new Map(itemsBySlot);
-          customItems.set('ammo', ammoFor(attackGear.weapon, itemsBySlot.get('ammo') ?? []));
-
-          return (
-            <div className="sequence-action-card" key={step.id}>
-              <div className="sequence-action">
-                <div className="sequence-action-main">
-                  <b>{String(index + 1).padStart(2, '0')}</b>
-                  <label className="sequence-spec-toggle">
-                    <input
-                      type="checkbox"
-                      checked={step.specId !== null}
-                      onChange={(event) => updateStep(index, {
-                        specId: event.target.checked ? step.specId ?? specs[0]?.id ?? null : null,
-                      })}
-                    />
-                    Use spec
-                  </label>
-                  {step.specId ? (
-                    <select aria-label={`Special attack for attack ${index + 1}`} value={step.specId} onChange={(event) => updateStep(index, { specId: event.target.value })}>
-                      {specs.map((spec) => <option key={spec.id} value={spec.id}>{spec.def.name} ({spec.def.cost}%)</option>)}
-                    </select>
-                  ) : <span className="sequence-regular">Regular attack</span>}
-                  <span className="sequence-detail">{attack?.load.maxHit ?? 0} max · {attack?.load.speed ?? 0} ticks</span>
-                </div>
-                <div className="sequence-action-buttons">
-                  <button className="mini" title={step.gearOverride ? 'Edit this attack setup' : 'Set a gear switch for this attack'} onClick={() => {
-                    const baseStyles = stylesForCategory(baseGear.weapon?.category);
-                    updateStep(index, {
-                      editing: !step.editing,
-                      gearOverride: step.gearOverride ?? { ...baseGear },
-                      styleIndex: step.styleIndex ?? Math.min(baseStyleIndex, baseStyles.length - 1),
-                    });
-                  }}>{step.gearOverride ? 'Edit setup' : 'Gear switch'}</button>
-                  <button className="mini" title="Move earlier" disabled={index === 0} onClick={() => {
-                    setActions((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; }); setResult(null);
-                  }}>↑</button>
-                  <button className="mini" title="Move later" disabled={index === actions.length - 1} onClick={() => {
-                    setActions((current) => { const next = [...current]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; }); setResult(null);
-                  }}>↓</button>
-                  <button className="mini" title="Remove attack" disabled={actions.length <= 1} onClick={() => setAttackCount(actions.length - 1)}>×</button>
-                </div>
-              </div>
-
-              {step.editing && step.gearOverride && (
-                <div className="sequence-setup-panel">
-                  <div className="sequence-setup-heading">
-                    <strong>Attack {index + 1} gear setup</strong>
-                    <button className="mini" onClick={() => updateStep(index, { gearOverride: null, styleIndex: null, editing: false })}>Use Speedrun default</button>
-                  </div>
-                  <label className="sequence-style-select">
-                    <span>Attack style</span>
-                    <select value={styleIndex} onChange={(event) => updateStep(index, { styleIndex: Number(event.target.value) })}>
-                      {styleOptions.map((style, styleOptionIndex) => <option key={`${style.name}-${styleOptionIndex}`} value={styleOptionIndex}>{style.name} ({style.stance})</option>)}
-                    </select>
-                  </label>
-                  <GearGrid
-                    gear={step.gearOverride}
-                    itemsBySlot={customItems}
-                    onChange={(slot, item) => {
-                      const nextGear = { ...step.gearOverride!, [slot]: item };
-                      const nextStyles = stylesForCategory(nextGear.weapon?.category);
-                      updateStep(index, {
-                        gearOverride: nextGear,
-                        styleIndex: slot === 'weapon' ? defaultStyleIndex(nextStyles) : styleIndex,
-                      });
-                    }}
-                    attackType={attack?.load.type ?? 'melee'}
-                    targetAttributes={monster?.attributes ?? []}
-                  />
-                </div>
-              )}
+    <div className="sequence-actions">
+      {groups.map((group, index) => {
+        const setup = group.setup ?? baseSetup;
+        const gear = setup.gear;
+        const styles = stylesForCategory(gear.weapon?.category);
+        const styleIndex = Math.min(setup.styleIndex, styles.length - 1);
+        const attack = buildAttack(setup, group.specId);
+        const customItems = new Map(itemsBySlot); customItems.set('ammo', ammoFor(gear.weapon, itemsBySlot.get('ammo') ?? []));
+        const drag = { index };
+        return <div className="sequence-action-card" key={group.id} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(index)); event.dataTransfer.effectAllowed = 'move'; }}
+          onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); reorder(Number(event.dataTransfer.getData('text/plain')), drag.index); }}>
+          <div className="sequence-action">
+            <div className="sequence-action-main">
+              <span className="sequence-drag" title="Drag to reorder">⠿</span><b>{String(index + 1).padStart(2, '0')}</b>
+              <span className="sequence-weapon" title={gear.weapon?.name ?? 'Unarmed'}>{gear.weapon?.name ?? 'Unarmed'}</span>
+              <label className="sequence-count-control"><span>Attacks</span><input type="number" min={1} max={MAX_ATTACKS} value={group.count} onChange={(event) => setCount(index, Number(event.target.value))} /></label>
+              <label className="sequence-spec-toggle"><input type="checkbox" checked={group.specId !== null} onChange={(event) => updateGroup(index, { specId: event.target.checked ? group.specId ?? specs[0]?.id ?? null : null })} />Use spec</label>
+              {group.specId ? <select aria-label={`Special attack for loadout ${index + 1}`} value={group.specId} onChange={(event) => updateGroup(index, { specId: event.target.value })}>
+                {specs.map((spec) => <option key={spec.id} value={spec.id}>{spec.def.name} ({spec.def.cost}%)</option>)}
+              </select> : <span className="sequence-regular">Regular attack</span>}
+              <span className="sequence-detail">{attack?.load.maxHit ?? 0} max · {attack?.load.speed ?? 0} ticks</span>
             </div>
-          );
-        })}
-      </div>
+            <div className="sequence-action-buttons">
+              <button className="mini" title="Edit gear and attack style" onClick={() => updateGroup(index, { editing: !group.editing, setup: group.setup ?? { ...baseSetup, gear: { ...baseGear } } })}>{group.setup ? 'Edit setup' : 'Gear switch'}</button>
+              <button className="mini" title="Move earlier" disabled={index === 0} onClick={() => reorder(index, index - 1)}>↑</button>
+              <button className="mini" title="Move later" disabled={index === groups.length - 1} onClick={() => reorder(index, index + 1)}>↓</button>
+              <button className="mini" title="Remove loadout" disabled={groups.length <= 1} onClick={() => { setGroups((g) => g.filter((_, i) => i !== index)); setResult(null); }}>×</button>
+            </div>
+          </div>
+          <div className="sequence-row-subcontrols">
+            <label><span>Downtime after each attack (s)</span><input type="number" min={0} max={120} step={.1} value={group.downtimeSeconds} onChange={(event) => updateGroup(index, { downtimeSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label>
+          </div>
+          {group.editing && group.setup && <div className="sequence-setup-panel">
+            <div className="sequence-setup-heading"><strong>Loadout {index + 1} · {gear.weapon?.name ?? 'Unarmed'}</strong>
+              <button className="mini" onClick={() => updateGroup(index, { setup: null, editing: false })}>Use Speedrun default</button></div>
+            <label className="sequence-style-select"><span>Attack style</span><select value={styleIndex} onChange={(event) => updateGroup(index, { setup: { ...group.setup!, styleIndex: Number(event.target.value) } })}>
+              {styles.map((style, i) => <option key={`${style.name}-${i}`} value={i}>{style.name} ({style.stance})</option>)}</select></label>
+            <GearGrid gear={gear} itemsBySlot={customItems} onChange={(slot, item) => {
+              const nextGear = { ...gear, [slot]: item }; const nextStyles = stylesForCategory(nextGear.weapon?.category);
+              updateGroup(index, { setup: { ...setup, gear: nextGear, styleIndex: slot === 'weapon' ? defaultStyleIndex(nextStyles) : styleIndex } });
+            }} attackType={attack?.load.type ?? 'melee'} targetAttributes={monster?.attributes ?? []} />
+          </div>}
+        </div>;
+      })}
+    </div>
+    <button className="mini sequence-add" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, freshGroup()]); setResult(null); }}>+ Add loadout line</button>
 
-      <div className="sequence-controls">
-        <label className="sequence-count-control">
-          <span>Number of attacks</span>
-          <input type="number" min={1} max={MAX_ATTACKS} value={actions.length} onChange={(event) => setAttackCount(Number(event.target.value))} />
-        </label>
-        <label>
-          <span>Trials</span>
-          <select value={trials} onChange={(event) => setTrials(Number(event.target.value))}>
-            <option value={5000}>5,000</option><option value={20000}>20,000</option><option value={100000}>100,000</option>
-          </select>
-        </label>
-        <label>
-          <span>Record target (seconds, optional)</span>
-          <input type="number" min={0} max={600} step={0.1} value={targetSeconds} onChange={(event) => setTargetSeconds(Math.max(0, Number(event.target.value) || 0))} />
-        </label>
-        <label>
-          <span title="Fixed time added for phase transitions, death animation, and other pauses">Total downtime (seconds)</span>
-          <input type="number" min={0} max={600} step={0.1} value={downtimeSeconds} onChange={(event) => setDowntimeSeconds(Math.max(0, Number(event.target.value) || 0))} />
-        </label>
-        <button className="primary sequence-run" disabled={!monster || !actions.length || running} onClick={run}>{running ? 'Simulating…' : 'Simulate sequence'}</button>
-      </div>
-
-      {result && <div className="sequence-results">
-        <div className="sequence-result-primary"><span>Kill chance</span><strong>{chance(result.killChance)}</strong><small>{result.kills.toLocaleString()} / {result.trials.toLocaleString()} trials</small></div>
-        {result.targetChance !== null && <div className="sequence-result-primary"><span>At or under {result.targetSeconds.toFixed(1)}s</span><strong>{chance(result.targetChance)}</strong><small>all trials, including failed kills</small></div>}
-        <div><span>Mean run time</span><b>{seconds(result.meanKillTicks, result.downtimeSeconds)}</b><small>successful runs, downtime included</small></div>
-        <div><span>Median / 90th percentile</span><b>{seconds(result.medianKillTicks, result.downtimeSeconds)} / {seconds(result.p90KillTicks, result.downtimeSeconds)}</b><small>successful runs, downtime included</small></div>
-        <div><span>Full script time</span><b>{seconds(result.sequenceTicks, result.downtimeSeconds)}</b><small>including total downtime</small></div>
-        <p className="help-text sequence-caveat">Each attack uses its selected special attack and gear setup. Regular attacks use standard accuracy and uniform damage rolls; specs account for accuracy, damage, defence drains, and energy costs. Total downtime is added to each run and record-target check. Boss phases, special main-weapon procs, movement, and incoming damage are not modeled.</p>
-      </div>}
-    </section>
-  );
+    <div className="sequence-controls">
+      <label><span>Trials</span><select value={trials} onChange={(event) => setTrials(Number(event.target.value))}><option value={5000}>5,000</option><option value={20000}>20,000</option><option value={100000}>100,000</option></select></label>
+      <label><span>Record target (seconds, optional)</span><input type="number" min={0} max={600} step={.1} value={targetSeconds} onChange={(event) => setTargetSeconds(Math.max(0, Number(event.target.value) || 0))} /></label>
+      <label><span title="Time added for phase transitions, death animation, etc.">Kill overhead (seconds)</span><input type="number" min={0} max={600} step={.1} value={killOverheadSeconds} onChange={(event) => setKillOverheadSeconds(Math.max(0, Number(event.target.value) || 0))} /></label>
+      <label><span title="Time spent resetting before retrying">Reset time (seconds)</span><input type="number" min={0} max={600} step={.1} value={resetSeconds} onChange={(event) => setResetSeconds(Math.max(0, Number(event.target.value) || 0))} /></label>
+      <button className="primary sequence-run" disabled={!monster || !resolved.length || running} onClick={run}>{running ? 'Simulating…' : 'Simulate sequence'}</button>
+    </div>
+    {result && <div className="sequence-results">
+      <div className="sequence-result-primary"><span>Kill chance per attempt</span><strong>{chance(result.killChance)}</strong><small>{result.kills.toLocaleString()} / {result.trials.toLocaleString()} trials</small></div>
+      <div className="sequence-result-primary"><span>Best reset point</span><strong>{result.optimalResetAfterAttack === null ? 'None' : `After attack ${result.optimalResetAfterAttack}`}</strong><small>{result.expectedKillSeconds === null ? 'No kills observed at any cutoff' : `${result.expectedKillSeconds.toFixed(2)}s expected per kill with retries`}</small></div>
+      {result.targetChance !== null && <div className="sequence-result-primary"><span>At or under {result.targetSeconds.toFixed(1)}s</span><strong>{chance(result.targetChance)}</strong><small>single-attempt kill chance</small></div>}
+      <div><span>Mean / median kill time</span><b>{result.meanKillTicks === null ? 'No kills' : `${(result.meanKillTicks * .6 + result.downtimeSeconds).toFixed(2)}s / ${((result.medianKillTicks ?? 0) * .6 + result.downtimeSeconds).toFixed(2)}s`}</b><small>successful attempts including kill overhead</small></div>
+      <div className="sequence-reset-options"><span>Reset strategy comparison</span>{result.resetOptions.map((option) => <small key={option.afterAttack}>After {option.afterAttack}: {chance(option.chance)} · {option.expectedSeconds === null ? 'no sampled kills' : `${option.expectedSeconds.toFixed(2)}s expected`}</small>)}</div>
+      {result.mathematicallyImpossible && <p className="warn sequence-caveat">This sequence is mathematically unable to deal enough maximum damage to defeat this boss, even if every hit reaches its maximum.</p>}
+      <p className="help-text sequence-caveat">The reset estimate assumes each retry starts with the same spec energy. Damage and accuracy are simulated; pauses between attacks, kill overhead, and reset time are included. Boss phases, weapon procs, movement, and incoming damage are not modeled.</p>
+    </div>}
+  </section>;
 }

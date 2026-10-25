@@ -159,6 +159,21 @@ header p {
 .sequence-action-main > b { flex: 0 0 28px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sequence-action-main select { flex: 1; min-width: 120px; }
 .sequence-action-buttons { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.sequence-presets { display: flex; align-items: center; gap: 7px; margin: 10px 0; flex-wrap: wrap; }
+.sequence-presets > span { color: var(--muted); font-size: 12px; }
+.sequence-action-card { cursor: grab; }
+.sequence-action-card:active { cursor: grabbing; }
+.sequence-drag { color: var(--muted); cursor: grab; font-size: 18px; line-height: 1; user-select: none; }
+.sequence-weapon { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-size: 12px; }
+.sequence-row-subcontrols { display: flex; justify-content: flex-end; margin-top: 7px; }
+.sequence-row-subcontrols label { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 11px; }
+.sequence-row-subcontrols input { width: 76px; padding: 5px 7px; }
+.sequence-action-main .sequence-count-control { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0; color: var(--muted); font-size: 11px; }
+.sequence-action-main .sequence-count-control input { width: 58px; padding: 5px; }
+.sequence-add { margin-top: 8px; }
+.sequence-reset-options { display: flex; flex-direction: column; gap: 3px; padding: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; }
+.sequence-reset-options > span { color: var(--muted); font-size: 11px; }
+.sequence-caveat { grid-column: 1 / -1; }
 .sequence-spec-toggle { display: flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; }
 .sequence-spec-toggle input { width: auto; margin: 0; }
 .sequence-regular { flex: 1; color: var(--text); }
@@ -170,8 +185,7 @@ header p {
 .sequence-controls { margin-top: 12px; align-items: end; flex-wrap: wrap; }
 .sequence-controls label { margin: 0; min-width: 120px; }
 .sequence-controls label:nth-of-type(2) { flex: 1; min-width: 190px; }
-.sequence-add { flex: 1; min-width: 280px; }
-.sequence-add select { flex: 1; min-width: 140px; }
+.sequence-add { flex: 0 0 auto; min-width: 0; }
 .sequence-run { width: auto !important; min-width: 180px; align-self: end; }
 .sequence-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; margin-top: 14px; }
 .sequence-results > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; }
@@ -196,10 +210,13 @@ header p {
   .speedrun-loadout-controls { grid-template-columns: 1fr; }
   .speedrun-loadout-options { grid-template-columns: 1fr; }
   .sequence-action { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .sequence-action-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
-  .sequence-action-main > b { grid-column: 1; grid-row: 1; }
-  .sequence-spec-toggle { grid-column: 2; grid-row: 1; }
-  .sequence-action-main select, .sequence-regular { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; }
+  .sequence-action-main { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr) auto; gap: 8px; }
+  .sequence-drag { grid-column: 1; grid-row: 1; }
+  .sequence-action-main > b { grid-column: 2; grid-row: 1; }
+  .sequence-weapon { grid-column: 3; grid-row: 1; max-width: 100%; }
+  .sequence-action-main .sequence-count-control { grid-column: 4; grid-row: 1; }
+  .sequence-spec-toggle { grid-column: 1 / -1; grid-row: 2; }
+  .sequence-action-main select, .sequence-regular { grid-column: 1 / -1; grid-row: 3; width: 100%; min-width: 0; }
   .sequence-action .sequence-detail { display: none; }
   .sequence-action-buttons { justify-content: flex-end; }
   .sequence-count-control { width: auto; }
