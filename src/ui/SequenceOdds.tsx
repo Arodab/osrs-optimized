@@ -54,7 +54,8 @@ const readStrategy = (equipment: Equip[]): LoadedStrategy | null => {
         : legacy.gearOverride ? { gear: refsToGear(legacy.gearOverride, equipment), styleIndex: legacy.styleIndex ?? 0, prayerKey: 'piety', potionId: 'super_combat', spellName: '' } : null;
       return { ...group, count: Math.max(1, group.count ?? 1), setup, downtimeSeconds: group.downtimeSeconds ?? 0, editing: false } as AttackGroup;
     });
-    return { ...saved, groups: groups.length ? groups : [freshGroup()] };
+    return { ...saved, killOverheadSeconds: saved.killOverheadSeconds ?? (saved as Partial<SavedStrategy> & { downtimeSeconds?: number }).downtimeSeconds,
+      groups: groups.length ? groups : [freshGroup()] };
   } catch { return null; }
 };
 
@@ -118,9 +119,9 @@ export default function SequenceOdds({ monster, baseGear, baseStyleIndex, baseSe
     {!monster && <div className="warn">Choose a boss in SpecScape to simulate a sequence.</div>}
 
     <div className="sequence-presets"><span>Quick add:</span>
-      <button className="mini" onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_melee_scythe') }]); setResult(null); }}>Max melee</button>
-      <button className="mini" onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_ranged_tbow') }]); setResult(null); }}>Max ranged</button>
-      <button className="mini" onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_magic_shadow') }]); setResult(null); }}>Max mage</button>
+      <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_melee_scythe') }]); setResult(null); }}>Max melee</button>
+      <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_ranged_tbow') }]); setResult(null); }}>Max ranged</button>
+      <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_magic_shadow') }]); setResult(null); }}>Max mage</button>
     </div>
 
     <div className="sequence-actions">
