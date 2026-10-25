@@ -111,6 +111,18 @@ These interact in ways worth seeing: a salve (ei) on Vorkath boosts your main we
 every melee spec by 20%, but does nothing for the Zaryte crossbow's percent-of-HP ruby proc -
 so turning salve on drops ZCB from 1st to 4th.
 
+### Speedrun odds
+
+The **Speedrun odds** panel lets you build a fixed ordered list of main-weapon attacks and
+special attacks against the selected boss. It estimates the chance that the sequence kills,
+the conditional kill-time distribution, and (optionally) the chance of meeting a time target.
+You can add a total downtime allowance for phase transitions, death animation, and other pauses;
+that time is included in reported run times and target checks.
+Spec costs, accuracy, damage rolls and defence drains use the same combat definitions as the
+comparison simulator. Regular attacks use the standard accuracy and uniform damage model;
+boss phases, movement, incoming damage, and special main-weapon procs are outside this first
+version, so a time-target result is an estimate rather than a record prediction.
+
 ## Finding gear
 
 Clicking a slot opens a picker that **sorts by the strength stat matching your equipped
@@ -160,6 +172,7 @@ src/sim/          pure simulation engine, no UI dependencies
   combat.ts       accuracy, defence rolls, max hit
   specs.ts        spec attack registry (damage, accuracy, drain effects)
   simulate.ts     Monte Carlo kill simulation
+  sequence.ts     Monte Carlo odds for a user-authored ordered attack script
   defenceFloors.ts per-boss drain floors and immunities
   loadout.ts      levels + prayers + gear -> attack roll / max hit
   attackStyles.ts per-weapon-category style tables and stance bonuses
@@ -171,6 +184,7 @@ src/ui/
   build.ts        turns the UI's gear + buffs into simulator loadouts
   GearGrid.tsx    in-game equipment layout, item icons and the item picker
   SwitchesModal.tsx  per-spec switch editor with a live accuracy readout
+  SequenceOdds.tsx   fixed-sequence editor and kill-odds results
   setups.ts       localStorage save/load plus JSON import/export
 src/worker/       runs the Monte Carlo off the main thread
 scripts/          data fetch + scratch harnesses

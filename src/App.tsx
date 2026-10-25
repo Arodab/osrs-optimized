@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GearGrid, { ItemIcon, itemLabel } from './ui/GearGrid';
 import SwitchesModal, { type SwitchPreview } from './ui/SwitchesModal';
 import DistributionModal from './ui/DistributionModal';
+import SequenceOdds from './ui/SequenceOdds';
 import {
   SLOTS, DEFAULT_AMMO, ammoFor, ammoKindFor, pickVariant,
   type Equip, type GearSet, type Slot,
@@ -254,6 +255,11 @@ export default function App() {
     }
     return out;
   }, [switches, equipment]);
+
+  const sequenceSpecs = useMemo(
+    () => buildSpecCandidates(setup, equipment, new Set(SPECS.map((s) => s.id)), firstEncounterMonster, resolvedSwitches),
+    [setup, equipment, firstEncounterMonster, resolvedSwitches],
+  );
 
   const applyPreset = useCallback((id: string, targetTab?: TabKind) => {
     const preset = PRESETS.find((p) => p.id === id);
@@ -990,6 +996,15 @@ export default function App() {
           <button className="primary" style={{ marginTop: "16px", width: "100%" }} onClick={run} disabled={running || !encounters.length}>{running ? progressLabel(progress) : "Compare specs"}</button>
         </section>
       </div>
+
+      <SequenceOdds
+        monster={firstEncounterMonster}
+        main={main}
+        specs={sequenceSpecs}
+        specOptions={specOptions}
+        startEnergy={startEnergy}
+        lightbearer={gear.ring?.name === 'Lightbearer'}
+      />
 
       <div className="layout">
         <div>
