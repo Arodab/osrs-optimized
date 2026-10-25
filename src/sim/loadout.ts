@@ -129,6 +129,7 @@ export const buildLoadout = (input: LoadoutInput): Loadout => {
 export const PRAYERS: Record<string, Prayers> = {
   none: { attack: 1, strength: 1, ranged: 1, rangedStrength: 1, magic: 1 },
   piety: { attack: 1.2, strength: 1.23, ranged: 1, rangedStrength: 1, magic: 1 },
+  zeal: { attack: 1.25, strength: 1.28, ranged: 1, rangedStrength: 1, magic: 1 },
   chivalry: { attack: 1.15, strength: 1.18, ranged: 1, rangedStrength: 1, magic: 1 },
   rigour: { attack: 1, strength: 1, ranged: 1.2, rangedStrength: 1.23, magic: 1 },
   eagleEye: { attack: 1, strength: 1, ranged: 1.15, rangedStrength: 1.15, magic: 1 },

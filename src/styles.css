@@ -64,6 +64,9 @@ body {
 .speedrun-context { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
 .speedrun-context h2 { margin: 3px 0 4px; color: var(--text); font-size: 19px; text-transform: none; letter-spacing: 0; }
 .speedrun-context p { margin: 0; }
+.speedrun-boss-controls { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.speedrun-boss-controls label { width: min(300px, 100%); margin: 0; }
+.speedrun-boss-controls button { white-space: nowrap; }
 .eyebrow { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .speedrun-page .sequence-odds { min-height: 250px; }
 .speedrun-page .sequence-controls { align-items: end; }
@@ -206,6 +209,8 @@ header p {
   .page-nav-item { justify-content: center; padding-inline: 0; }
   .sidebar-collapse { margin-top: 12px; }
   .speedrun-context { align-items: flex-start; flex-direction: column; }
+  .speedrun-boss-controls { width: 100%; align-items: stretch; flex-direction: column; }
+  .speedrun-boss-controls label { width: 100%; }
   .speedrun-loadout-heading, .panel-title-row { align-items: flex-start; flex-direction: column; }
   .panel-title-actions, .sequence-heading-actions { align-items: flex-start; width: 100%; }
   .speedrun-preset { width: 100%; }

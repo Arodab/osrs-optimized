@@ -80,6 +80,11 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
     if (!equipment.length || initialized.current) return;
     const saved = readStrategy(equipment);
     const isOldBlankDefault = saved?.groups?.length === 5 && saved.groups.every((g) => !g.useSpec && !g.setup && g.count === 1);
+    const isOldZulrahDefault = saved?.groups?.length === 2
+      && saved.groups[0].count === 2 && saved.groups[0].useSpec
+      && saved.groups[0].setup?.gear.weapon?.name === "Zorya's tome"
+      && saved.groups[1].count === 1 && saved.groups[1].useSpec
+      && saved.groups[1].setup?.gear.weapon?.name?.startsWith('Crystal halberd');
     if (!saved || isOldBlankDefault) {
       const mage = makePreset('max_magic_shadow');
       const tome = equipment.find((item) => item.name === "Zorya's tome" && item.slot === 'weapon');
@@ -93,6 +98,12 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
         { ...freshGroup(), count: 2, useSpec: true, setup: mage },
         { ...freshGroup(), useSpec: true, setup: melee },
       ]);
+    } else if (isOldZulrahDefault) {
+      setGroups(saved.groups!.map((group, index) => ({ ...group, setup: group.setup ? {
+        ...group.setup,
+        prayerKey: index === 1 ? 'zeal' : group.setup.prayerKey,
+        potionId: 'smelling_salts',
+      } : null })));
     } else setGroups(saved.groups ?? [freshGroup()]);
     if (saved && !isOldBlankDefault) {
       setTrials(saved.trials ?? 20000);
@@ -160,7 +171,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, itemsBySlot
           trials, targetSeconds, killOverheadSeconds, resetSeconds,
         })}>Export Speedrun loadout</button>
       </div></div>
-    {!monster && <div className="warn">Choose a boss in SpecScape to simulate a sequence.</div>}
+    {!monster && <div className="warn">Choose a boss above to simulate a sequence.</div>}
 
     <div className="sequence-presets"><span>Quick add:</span>
       <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_melee_scythe') }]); setResult(null); }}>Max melee</button>

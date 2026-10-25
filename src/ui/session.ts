@@ -42,6 +42,8 @@ export interface SessionState {
   tabs?: Record<TabKind, TabStateRaw>;
   /** The Speedrun tool owns a separate loadout; this is never synced implicitly. */
   speedrunLoadout?: TabStateRaw;
+  /** Boss selected in Speedrun, independent of the SpecScape encounter sequence. */
+  speedrunMonsterId?: string;
   activeTab?: TabKind;
   lockedSlots?: Slot[];
 

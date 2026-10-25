@@ -57,7 +57,7 @@ const knownSpecIds = (ids: readonly string[] | undefined): string[] =>
 
 const PRAYER_OPTIONS = [
   ['none', 'None'], ['chivalry', 'Chivalry'], ['piety', 'Piety'],
-  ['eagleEye', 'Eagle Eye'], ['rigour', 'Rigour'], ['augury', 'Augury'],
+  ['zeal', 'Zeal'], ['eagleEye', 'Eagle Eye'], ['rigour', 'Rigour'], ['augury', 'Augury'],
 ] as const;
 
 /** What the search is doing right now, for the button and the empty state. */
@@ -103,11 +103,7 @@ const presetTab = (id: string, equipment: Equip[]): LoadoutTab => {
 
 const defaultSpeedrunTab = (equipment: Equip[]): LoadoutTab => {
   const tab = presetTab('max_magic_shadow', equipment);
-  const tome = equipment.find((item) => item.name === "Zorya's tome" && item.slot === 'weapon');
-  if (tome) {
-    tab.gear = { ...tab.gear, weapon: tome };
-    tab.styleIndex = defaultStyleIndex(stylesFor(tab.gear));
-  }
+  tab.potionId = 'smelling_salts';
   return tab;
 };
 
@@ -141,6 +137,7 @@ export default function App() {
   }, [activePage]);
 
   const [encounters, setEncounters] = useState<EncounterDef[]>([{ id: crypto.randomUUID(), monsterId: DEFAULT_MONSTER, styleTab: 'melee', count: 1, downtimeSeconds: 0 }]);
+  const [speedrunMonsterId, setSpeedrunMonsterId] = useState(DEFAULT_MONSTER);
   const loadPreset = (preset: 'toa' | 'tob' | 'cox') => {
     let list: any[] = [];
     if (preset === 'toa') {
@@ -315,6 +312,11 @@ export default function App() {
     },
     [monsters, encounters]
   );
+
+  const speedrunMonster = useMemo(
+    () => monsters.find((candidate) => monsterLabel(candidate) === speedrunMonsterId) ?? null,
+    [monsters, speedrunMonsterId],
+  );
   
   const monster = firstEncounterMonster;
 
@@ -357,8 +359,8 @@ export default function App() {
   }, [switches, equipment]);
 
   const speedrunSpecs = useMemo(
-    () => buildSpecCandidates(speedrunSetup, equipment, new Set(SPECS.map((s) => s.id)), firstEncounterMonster),
-    [speedrunSetup, equipment, firstEncounterMonster],
+    () => buildSpecCandidates(speedrunSetup, equipment, new Set(SPECS.map((s) => s.id)), speedrunMonster),
+    [speedrunSetup, equipment, speedrunMonster],
   );
 
   const buildSpeedrunAttack = useCallback((
@@ -369,7 +371,7 @@ export default function App() {
     const equippedWeaponName = sequenceSetup.gear.weapon?.name ?? '';
     const def = useSpec ? SPECS.find((candidate) => candidate.item === equippedWeaponName || equippedWeaponName.startsWith(`${candidate.item} (`)) : undefined;
     if (!useSpec) {
-      const load = buildMain(attackSetup, firstEncounterMonster);
+      const load = buildMain(attackSetup, speedrunMonster);
       return { id: 'main', label: `Regular attack (${load.name})`, load, weaponName: equippedWeaponName };
     }
     const weapon = def ? specWeaponItem(def, equipment) : null;
@@ -377,11 +379,11 @@ export default function App() {
     return {
       id: def.id,
       label: `${def.name} spec (${def.cost}%)`,
-      load: buildSpecLoadout(attackSetup, def, weapon, firstEncounterMonster),
+      load: buildSpecLoadout(attackSetup, def, weapon, speedrunMonster),
       weaponName: equippedWeaponName,
       spec: def,
     };
-  }, [speedrunSetup, firstEncounterMonster, equipment, spells]);
+  }, [speedrunSetup, speedrunMonster, equipment, spells]);
 
   const applyPreset = useCallback((id: string, targetTab?: TabKind) => {
     const preset = PRESETS.find((p) => p.id === id);
@@ -485,11 +487,14 @@ export default function App() {
     const restoredSpeedrunLoadout = prev.speedrunLoadout
       ? { ...prev.speedrunLoadout, gear: refsToGear(prev.speedrunLoadout.gear, equipment) }
       : null;
+    const wasOldMagicDefaultWithTome = restoredSpeedrunLoadout?.presetId === 'max_magic_shadow'
+      && restoredSpeedrunLoadout.gear.weapon?.name === "Zorya's tome";
     const wasUnchangedOldSpeedrunDefault = restoredSpeedrunLoadout?.presetId === 'max_melee_scythe'
       && restoredSpeedrunLoadout.gear.weapon?.name === 'Scythe of Vitur';
-    setSpeedrunLoadout(!restoredSpeedrunLoadout || wasUnchangedOldSpeedrunDefault
+    setSpeedrunLoadout(!restoredSpeedrunLoadout || wasOldMagicDefaultWithTome || wasUnchangedOldSpeedrunDefault
       ? defaultSpeedrunTab(equipment)
       : restoredSpeedrunLoadout);
+    setSpeedrunMonsterId(prev.speedrunMonsterId ?? DEFAULT_MONSTER);
 
     if (prev.levels) setLevels(prev.levels);
     setBuffs(prev.buffs ?? DEFAULT_BUFFS);
@@ -521,6 +526,7 @@ export default function App() {
       encounters,
       tabs: tabsRaw,
       speedrunLoadout: { ...speedrunLoadout, gear: gearToRefs(speedrunLoadout.gear) },
+      speedrunMonsterId,
       activeTab,
       lockedSlots: [...sharedSlots],
       levels, buffs, switches,
@@ -530,7 +536,7 @@ export default function App() {
     };
     saveSession(state);
   }, [
-    ready, equipment.length, encounters, tabs, speedrunLoadout, activeTab, sharedSlots, levels,
+    ready, equipment.length, encounters, tabs, speedrunLoadout, speedrunMonsterId, activeTab, sharedSlots, levels,
     buffs, switches, enabled, startEnergy, trials, kills,
     bankingSeconds, topSetups, compareLightbearer, setupName,
   ]);
@@ -1040,10 +1046,15 @@ export default function App() {
         <section className="panel speedrun-context">
           <div>
             <span className="eyebrow">Speedrun simulator</span>
-            <h2>{firstEncounterMonster?.name ?? 'Choose a boss'} · {speedrunLoadout.gear.weapon?.name ?? 'Unarmed'}</h2>
-            <p className="help-text">Build a record strategy. Speedrun keeps its own gear and combat setup; import between tools only when you choose.</p>
+            <h2>{speedrunMonster ? monsterLabel(speedrunMonster) : 'Choose a boss'} · {speedrunLoadout.gear.weapon?.name ?? 'Unarmed'}</h2>
+            <p className="help-text">Build a record strategy. Speedrun keeps its own boss, gear, and combat setup; import a loadout from SpecScape only when you choose.</p>
           </div>
-          <button type="button" className="mini" onClick={importSpecScapeLoadout}>Import from SpecScape</button>
+          <div className="speedrun-boss-controls">
+            <label><span>Speedrun boss</span><input list="speedrun-monster-list" value={speedrunMonsterId}
+              onChange={(event) => setSpeedrunMonsterId(event.target.value)} placeholder="Choose a boss..." /></label>
+            <datalist id="speedrun-monster-list">{monsterOptions}</datalist>
+            <button type="button" className="mini" onClick={importSpecScapeLoadout}>Import loadout from SpecScape</button>
+          </div>
         </section>
         <section className="panel speedrun-loadout-panel">
           <div className="speedrun-loadout-heading">
@@ -1065,7 +1076,7 @@ export default function App() {
               itemsBySlot={speedrunPickerItems}
               onChange={setSpeedrunSlot}
               attackType={speedrunStyle.attackType}
-              targetAttributes={firstEncounterMonster?.attributes ?? []}
+              targetAttributes={speedrunMonster?.attributes ?? []}
             />
             <div className="speedrun-loadout-options">
               <label>
@@ -1086,12 +1097,11 @@ export default function App() {
                   {POTIONS.map((potion) => <option key={potion.id} value={potion.id}>{potion.label}</option>)}
                 </select>
               </label>
-              <button type="button" className="mini" onClick={() => navigatePage('specscape')}>Edit boss in SpecScape</button>
             </div>
           </div>
         </section>
         <SequenceOdds
-          monster={firstEncounterMonster}
+          monster={speedrunMonster}
           baseGear={speedrunLoadout.gear}
           baseSetup={{ ...speedrunLoadout, spellName: speedrunLoadout.spellName }}
           itemsBySlot={itemsBySlot}
@@ -1103,7 +1113,8 @@ export default function App() {
           buildAttack={buildSpeedrunAttack}
           makePreset={(id) => {
             const preset = presetTab(id, equipment);
-            return { ...preset, spellName: preset.spellName };
+            return { ...preset, prayerKey: id.startsWith('max_melee_') ? 'zeal' : preset.prayerKey,
+              potionId: 'smelling_salts', spellName: preset.spellName };
           }}
         />
       </main>

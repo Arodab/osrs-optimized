@@ -25,6 +25,7 @@ const none = () => 0;
 const superPot = (lvl: number) => 5 + Math.floor(lvl * 0.15);
 const rangingPot = (lvl: number) => 4 + Math.floor(lvl * 0.1);
 const overload = (lvl: number) => 6 + Math.floor(lvl * 0.16);
+const smellingSalts = (lvl: number) => 11 + Math.floor(lvl * 0.16);
 
 export const POTIONS: Potion[] = [
   { id: 'none', label: 'No potion', attack: none, strength: none, ranged: none, magic: none },
@@ -33,6 +34,7 @@ export const POTIONS: Potion[] = [
   { id: 'ranging', label: 'Ranging potion', attack: none, strength: none, ranged: rangingPot, magic: none },
   { id: 'bastion', label: 'Bastion potion', attack: none, strength: none, ranged: rangingPot, magic: none },
   { id: 'overload', label: 'Overload (+)', attack: overload, strength: overload, ranged: overload, magic: overload },
+  { id: 'smelling_salts', label: 'Smelling salts (ToA)', attack: smellingSalts, strength: smellingSalts, ranged: smellingSalts, magic: smellingSalts },
   { id: 'imbued_heart', label: 'Imbued heart', attack: none, strength: none, ranged: none, magic: (l) => 1 + Math.floor(l * 0.1) },
 ];
 
