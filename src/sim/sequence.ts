@@ -37,6 +37,10 @@ const freshState = (monster: Monster): MonsterState => ({
 const percentile = (values: number[], p: number): number | null => values.length
   ? values[Math.min(values.length - 1, Math.ceil(values.length * p) - 1)] : null;
 
+/** Zulrah rerolls each hitsplat above 50 into the 45–50 range. */
+const applyDamageCap = (damage: number, monster: Monster, rng: () => number): number =>
+  monster.name === 'Zulrah' && damage > 50 ? randInt(rng, 45, 50) : damage;
+
 /** Run one attempt, stopping at the chosen reset point if the boss survives. */
 const attempt = (args: {
   monster: Monster; actions: SequenceAttack[]; cutoff: number; rng: () => number;
@@ -59,7 +63,8 @@ const attempt = (args: {
     if (!spec) {
       const hitLoad = zoryaEmpowered ? { ...action.load, maxHit: Math.floor(action.load.maxHit * 1.6) } : action.load;
       if (rng() < accuracy(hitLoad, monster, state, zoryaEmpowered ? { accuracyMultiplier: 2.5 } : {})) {
-        state.hp -= Math.min(state.hp, randInt(rng, 0, hitLoad.maxHit));
+        const damage = applyDamageCap(randInt(rng, 0, hitLoad.maxHit), monster, rng);
+        state.hp -= Math.min(state.hp, damage);
       }
     } else {
       let specHit = false;
@@ -68,7 +73,7 @@ const attempt = (args: {
         isDemon: monster.attributes.includes('demon'), options: args.specOptions, onHit: () => { specHit = true; } };
       for (const damage of spec.hits(ctx, spec.maxHit(action.load.maxHit))) {
         if (state.hp <= 0) break;
-        state.hp -= Math.min(state.hp, damage);
+        state.hp -= Math.min(state.hp, applyDamageCap(damage, monster, rng));
       }
       if (spec.id === 'zorya_tome' && specHit) zoryaEmpoweredAttacks = 3;
     }
@@ -123,9 +128,10 @@ export const simulateSequence = (args: {
   let maximumDamage = 0;
   // Four maximum hits is a deliberately generous upper bound for every spec;
   // this check must never call a possible kill impossible due to undercounting.
+  const maximumPerHit = (damage: number) => monster.name === 'Zulrah' ? Math.min(50, damage) : damage;
   for (const action of actions) maximumDamage += action.spec
-    ? action.spec.maxHit(action.load.maxHit) * 4
-    : action.load.maxHit;
+    ? maximumPerHit(action.spec.maxHit(action.load.maxHit)) * 4
+    : maximumPerHit(action.load.maxHit);
 
   const resetOptions: SequenceResult['resetOptions'] = [];
   let optimalResetAfterAttack: number | null = null;

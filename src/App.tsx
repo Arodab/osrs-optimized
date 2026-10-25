@@ -16,7 +16,7 @@ import { accuracy, dps } from './sim/combat';
 import { isPoweredStaff, type Spell } from './sim/spells';
 import {
   POTIONS, activeModifiers, buildMain, buildSpecCandidates, buildSpecLoadout,
-  selectedStyle, specWeaponItem, stylesFor, type SetupInput,
+  selectedStyle, specWeaponItem, stylesFor, potionById, type SetupInput,
 } from './ui/build';
 import { defaultStyleIndex } from './sim/attackStyles';
 import { DEFAULT_BUFFS, type Buffs } from './sim/modifiers';
@@ -74,6 +74,7 @@ const POTION_ICON_FILES: Record<string, string> = {
   overload: 'Overload (4).png',
   smelling_salts: 'Smelling salts (1).png',
   imbued_heart: 'Imbued heart.png',
+  saturated_heart: 'Saturated heart.png',
 };
 const prayerSelectOptions: IconSelectOption[] = PRAYER_OPTIONS.map(([value, label]) => ({
   value, label, icon: PRAYER_ICON_FILES[value], fallback: value === 'none' ? '–' : '✦',
@@ -1126,14 +1127,26 @@ export default function App() {
               </label>
             </div>
           </div>
-          <div className="speedrun-levels">
-            {(['attack', 'strength', 'ranged', 'magic'] as const).map((skill) => <label key={skill}>
-              <span>{skill === 'magic' ? 'Magic level' : `${skill[0].toUpperCase()}${skill.slice(1)} level`}</span>
-              <input type="number" min={1} max={99} value={speedrunLevels[skill]}
-                onChange={(event) => setSpeedrunLevels((current) => ({ ...current,
-                  [skill]: Math.max(1, Math.min(99, Number(event.target.value) || 1)) }))} />
-            </label>)}
+          <div className="speedrun-player-stats">
+            <h3>Player combat stats</h3>
+            <div className="speedrun-levels">
+              {(['attack', 'strength', 'ranged', 'magic'] as const).map((skill) => <label key={skill}>
+                <span>{skill === 'magic' ? 'Magic level' : `${skill[0].toUpperCase()}${skill.slice(1)} level`}</span>
+                <input type="number" min={1} max={99} value={speedrunLevels[skill]}
+                  onChange={(event) => setSpeedrunLevels((current) => ({ ...current,
+                    [skill]: Math.max(1, Math.min(99, Number(event.target.value) || 1)) }))} />
+                <small>Effective: {speedrunLevels[skill] + potionById(speedrunLoadout.potionId)[skill](speedrunLevels[skill])}</small>
+              </label>)}
+            </div>
           </div>
+          {speedrunMonster && <div className="speedrun-boss-stats">
+            <h3>{monsterLabel(speedrunMonster)} defenses</h3>
+            <div className="speedrun-stat-values">
+              <span><b>HP</b>{speedrunMonster.hp}</span><span><b>Defence</b>{speedrunMonster.def}</span><span><b>Magic</b>{speedrunMonster.magic}</span>
+              <span><b>Stab def</b>{speedrunMonster.d.stab}</span><span><b>Slash def</b>{speedrunMonster.d.slash}</span><span><b>Crush def</b>{speedrunMonster.d.crush}</span>
+              <span><b>Magic def</b>{speedrunMonster.d.magic}</span><span><b>Ranged def</b>{speedrunMonster.d.standard}</span><span><b>Ranged light</b>{speedrunMonster.d.light}</span><span><b>Ranged heavy</b>{speedrunMonster.d.heavy}</span>
+            </div>
+          </div>}
         </section>
         <SequenceOdds
           monster={speedrunMonster}

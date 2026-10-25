@@ -81,6 +81,12 @@ body {
 .speedrun-loadout-options button { justify-self: start; }
 .speedrun-levels { display: grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap: 8px 12px; margin-top: 14px; }
 .speedrun-levels label { margin: 0; }
+.speedrun-player-stats, .speedrun-boss-stats { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.speedrun-player-stats h3, .speedrun-boss-stats h3 { margin: 0; color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.speedrun-levels small { color: var(--muted); font-size: 11px; }
+.speedrun-stat-values { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.speedrun-stat-values span { display: inline-flex; gap: 5px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); background: var(--panel-2); font-variant-numeric: tabular-nums; }
+.speedrun-stat-values b { color: var(--muted); font-weight: 500; }
 .icon-select { position: relative; width: 100%; }
 .icon-select-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--text); background: var(--panel-2); font: inherit; text-align: left; cursor: pointer; }
 .icon-select-trigger:hover, .icon-select-trigger[aria-expanded="true"] { border-color: var(--accent); }

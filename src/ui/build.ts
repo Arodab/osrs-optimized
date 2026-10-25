@@ -36,6 +36,7 @@ export const POTIONS: Potion[] = [
   { id: 'overload', label: 'Overload (+)', attack: overload, strength: overload, ranged: overload, magic: overload },
   { id: 'smelling_salts', label: 'Smelling salts (ToA)', attack: smellingSalts, strength: smellingSalts, ranged: smellingSalts, magic: smellingSalts },
   { id: 'imbued_heart', label: 'Imbued heart', attack: none, strength: none, ranged: none, magic: (l) => 1 + Math.floor(l * 0.1) },
+  { id: 'saturated_heart', label: 'Saturated heart', attack: none, strength: none, ranged: none, magic: (l) => 4 + Math.floor(l * 0.1) },
 ];
 
 export const potionById = (id: string): Potion => POTIONS.find((p) => p.id === id) ?? POTIONS[0];

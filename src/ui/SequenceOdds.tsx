@@ -195,6 +195,13 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
         const displayedMaxHit = attack
           ? (group.useSpec && weaponSpec ? weaponSpec.def.maxHit(attack.load.maxHit) : attack.load.maxHit)
           : 0;
+        const zulrahCapApplies = monster?.name === 'Zulrah' && displayedMaxHit > 50;
+        const isTomeSpec = group.useSpec && weaponSpec?.def.id === 'zorya_tome';
+        const maxHitSummary = isTomeSpec
+          ? zulrahCapApplies
+            ? `50 (uncapped max ${displayedMaxHit}) × 4 = 200`
+            : `${displayedMaxHit} × 4 = ${displayedMaxHit * 4} max`
+          : zulrahCapApplies ? `50 (uncapped max ${displayedMaxHit})` : `${displayedMaxHit} max`;
         const customItems = new Map(itemsBySlot); customItems.set('ammo', ammoFor(gear.weapon, itemsBySlot.get('ammo') ?? []));
         const drag = { index };
         return <div className="sequence-action-card" key={group.id} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(index)); event.dataTransfer.effectAllowed = 'move'; }}
@@ -211,8 +218,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
                 onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} /><span>Use spec</span></label>
               {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
               <span className="sequence-detail">
-                {displayedMaxHit} max · {group.useSpec && weaponSpec?.def.id === 'zorya_tome'
-                  ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}
+                {maxHitSummary} · {isTomeSpec ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}
               </span>
             </div>
             <div className="sequence-action-buttons">
