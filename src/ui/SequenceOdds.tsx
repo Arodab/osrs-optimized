@@ -161,6 +161,17 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
         targetSeconds, downtimeSeconds: killOverheadSeconds, resetSeconds })); setRunning(false);
     }, 0);
   };
+  const addTomeBurst = () => {
+    const tome = equipment.find((item) => item.name === "Zorya's tome" && item.slot === 'weapon');
+    if (!tome || attackCount + 4 > MAX_ATTACKS) return;
+    const gear = { ...baseSetup.gear, weapon: tome };
+    const setup = { ...baseSetup, gear, styleIndex: defaultStyleIndex(stylesForCategory(tome.category)) };
+    setGroups((current) => [...current,
+      { ...freshGroup(), useSpec: true, setup: { ...setup, gear: { ...gear } } },
+      ...Array.from({ length: 3 }, () => ({ ...freshGroup(), setup: { ...setup, gear: { ...gear } } })),
+    ]);
+    setResult(null);
+  };
 
   return <section className="panel sequence-odds">
     <div className="sequence-heading"><div><h2>Speedrun odds</h2>
@@ -184,13 +195,14 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
     {!monster && <div className="warn">Choose a boss above to simulate a sequence.</div>}
 
     <div className="sequence-presets"><span>Quick add:</span>
+      <button className="mini" disabled={!equipment.some((item) => item.name === "Zorya's tome" && item.slot === 'weapon') || attackCount + 4 > MAX_ATTACKS} onClick={addTomeBurst}>Tome burst (4 hits)</button>
       <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_melee_scythe') }]); setResult(null); }}>Max melee</button>
       <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_ranged_tbow') }]); setResult(null); }}>Max ranged</button>
       <button className="mini" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, { ...freshGroup(), setup: makePreset('max_magic_shadow') }]); setResult(null); }}>Max mage</button>
     </div>
 
     <div className="sequence-actions">
-      {groups.map((group, index) => {
+      {(() => { let predictedTomeBuffs = 0; return groups.map((group, index) => {
         const setup = group.setup ?? baseSetup;
         const gear = setup.gear;
         const styles = stylesForCategory(gear.weapon?.category);
@@ -201,20 +213,30 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
           ? (group.useSpec && weaponSpec ? weaponSpec.def.maxHit(attack.load.maxHit) : attack.load.maxHit)
           : 0;
         const zulrahCapApplies = monster?.name === 'Zulrah' && displayedMaxHit > 50;
+        const isTomeWeapon = gear.weapon?.name === "Zorya's tome";
         const isTomeSpec = group.useSpec && weaponSpec?.def.id === 'zorya_tome';
+        const isEmpoweredTomeAction = isTomeWeapon && predictedTomeBuffs > 0;
+        const isEmpoweredTomeAttack = !group.useSpec && isEmpoweredTomeAction;
         const isCrystalHalberdSpec = group.useSpec && weaponSpec?.def.id === 'crystal_halberd';
         const hitSplats = isCrystalHalberdSpec && monster && monster.size > 1 ? 2 : 1;
         const hitAccuracy = attack && monster
           ? attack.spec?.guaranteed ? 1 : accuracy(attack.load, monster, {
             hp: monster.hp, def: monster.def, magic: monster.magic, baseDef: monster.def, baseAtk: 0, baseStr: 0,
-          }, attack.spec ? { styleOverride: attack.spec.defStyle, accuracyMultiplier: attack.spec.accMult } : {})
+          }, attack.spec ? { styleOverride: attack.spec.defStyle, accuracyMultiplier: attack.spec.accMult }
+            : isEmpoweredTomeAttack ? { accuracyMultiplier: 2.5 } : {})
           : null;
-        const perHitMax = zulrahCapApplies ? 50 : displayedMaxHit;
+        const effectiveMaxHit = isEmpoweredTomeAttack ? Math.floor(displayedMaxHit * 1.6) : displayedMaxHit;
+        const perHitMax = zulrahCapApplies ? 50 : effectiveMaxHit;
         const maxHitSummary = hitSplats > 1
           ? zulrahCapApplies
-            ? `${perHitMax} (uncapped max ${displayedMaxHit}) × ${hitSplats} = ${perHitMax * hitSplats}`
-            : `${displayedMaxHit} × ${hitSplats} = ${displayedMaxHit * hitSplats} max`
-          : zulrahCapApplies ? `50 (uncapped max ${displayedMaxHit})` : `${displayedMaxHit} max`;
+            ? `${perHitMax} (uncapped max ${effectiveMaxHit}) × ${hitSplats} = ${perHitMax * hitSplats}`
+            : `${effectiveMaxHit} × ${hitSplats} = ${effectiveMaxHit * hitSplats} max`
+          : zulrahCapApplies ? `50 (uncapped max ${effectiveMaxHit})` : `${effectiveMaxHit} max`;
+        const actionSpeed = isEmpoweredTomeAction ? 2 : attack?.load.speed ?? 0;
+        for (let repeated = 0; repeated < group.count; repeated++) {
+          if (isTomeWeapon && predictedTomeBuffs > 0) predictedTomeBuffs--;
+          if (isTomeSpec) predictedTomeBuffs = 3;
+        }
         const customItems = new Map(itemsBySlot); customItems.set('ammo', ammoFor(gear.weapon, itemsBySlot.get('ammo') ?? []));
         const drag = { index };
         return <div className="sequence-action-card" key={group.id} draggable onDragStart={(event) => { event.dataTransfer.setData('text/plain', String(index)); event.dataTransfer.effectAllowed = 'move'; }}
@@ -231,7 +253,9 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
                 onChange={(event) => updateGroup(index, { useSpec: event.target.checked })} /><span>Use spec</span></label>
               {!group.useSpec && <span className="sequence-regular">Regular attack</span>}
               <span className="sequence-detail">
-                <span>{maxHitSummary} · {isTomeSpec ? '9 ticks total on hit' : `${attack?.load.speed ?? 0} ticks`}</span>
+                <span>{maxHitSummary} · {isTomeSpec
+                  ? isEmpoweredTomeAction ? '2 ticks · previous Tome spec buff' : '3 ticks · hit buffs next 3 Tome attacks'
+                  : `${actionSpeed} ticks${isEmpoweredTomeAttack ? ' · empowered if prior spec hit' : ''}`}</span>
                 <small>Accuracy {hitAccuracy === null ? '—' : chance(hitAccuracy)}{hitSplats > 1 ? ' each hitsplat' : ''}</small>
               </span>
             </div>
@@ -262,7 +286,7 @@ export default function SequenceOdds({ monster, baseGear, baseSetup, combatLevel
             }} attackType={attack?.load.type ?? 'melee'} targetAttributes={monster?.attributes ?? []} />
           </div>}
         </div>;
-      })}
+      }); })()}
     </div>
     <button className="mini sequence-add" disabled={attackCount >= MAX_ATTACKS} onClick={() => { setGroups((g) => [...g, freshGroup()]); setResult(null); }}>+ Add loadout line</button>
 
