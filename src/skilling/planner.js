@@ -8,8 +8,9 @@ import { attachFossils, fossilMarkup } from './fossils.js';
 import { attachPraygility, praygilityMarkup } from './praygility-controls.js';
 import { defaultTrade } from './trade.js';
 import { protectionModes, treeGroups } from './trees.js';
+import { parseSnapshot } from './quote-snapshot.js';
 
-export function mountSkilling(root, api) {
+export function mountSkilling(root, api, pricesUrl) {
   const events = new AbortController();
   const { signal } = events;
   const on = (element, event, handler) => element.addEventListener(event, handler, { signal });
@@ -22,6 +23,8 @@ export function mountSkilling(root, api) {
   let marketQuotes = null;
   let quoteTime = null;
   let priceStatus = 'idle';
+  let nextPriceCheck = 0;
+  let renderMarketView = () => {};
   let playerName = '';
   let playerProfile = null;
   let playerStatus = 'idle';
@@ -101,12 +104,15 @@ export function mountSkilling(root, api) {
     const button = root.querySelector('#refresh-prices');
     const status = root.querySelector('#market-status');
     button.disabled = priceStatus === 'loading';
-    button.textContent = button.disabled ? t('Updating prices…', 'Atualizando preços…') : t('Update Wiki prices', 'Atualizar preços da Wiki');
-    const time = quoteTime ? new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(quoteTime) : '';
-    const label = priceStatus === 'loading' ? t('Requesting Grand Exchange quotes', 'Consultando cotações do Mercado Geral')
-      : priceStatus === 'error' ? t('Wiki prices unavailable. Try again.', 'Preços da Wiki indisponíveis. Tente novamente.')
-        : time ? t(`Wiki prices fetched ${time}`, `Preços da Wiki consultados em ${time}`) : t('Using source prices', 'Usando preços das fontes originais');
-    status.textContent = priceStatus === 'error' && time ? `${label} ${t(`Last update: ${time}`, `Última atualização: ${time}`)}` : label;
+    button.textContent = button.disabled ? t('Checking prices…', 'Consultando preços…') : t('Update Wiki prices', 'Atualizar preços da Wiki');
+    button.title = t('Loads the shared snapshot, published about every 30 minutes.', 'Carrega os preços compartilhados, publicados a cada 30 minutos aproximadamente.');
+    const time = quoteTime ? new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(quoteTime)) : '';
+    const snapshot = Date.now() - Date.parse(quoteTime) > 60 * 60 * 1000
+      ? t(`Using older Wiki prices from ${time}`, `Usando preços antigos da Wiki de ${time}`)
+      : t(`Wiki price snapshot from ${time}`, `Preços da Wiki de ${time}`);
+    status.textContent = priceStatus === 'loading' ? t('Checking the shared price snapshot', 'Consultando os preços compartilhados')
+      : priceStatus === 'error' ? time ? snapshot : t('Prices unavailable. Using source estimates.', 'Preços indisponíveis. Usando estimativas originais.')
+        : time ? snapshot : t('Using source prices', 'Usando preços das fontes originais');
     for (const group of root.querySelectorAll('[data-trade-group]')) {
       const buy = group.dataset.tradeGroup === 'buy';
       group.setAttribute('aria-label', buy ? t('Buy speed', 'Velocidade de compra') : t('Sell speed', 'Velocidade de venda'));
@@ -196,7 +202,21 @@ export function mountSkilling(root, api) {
       return `<tr><th scope="row">${row}</th>${rowHtml}</tr>`;
     }).join('');
     const columns = Array.from({ length: width }, (_, index) => `<th scope="col">${String.fromCharCode(65 + index)}</th>`).join('');
-    return `<details class="raw box" id="sheet-source"><summary>${t('View original sheet data', 'Ver dados originais da aba')}</summary><div class="table-scroll" role="region" tabindex="0" aria-label="${t('Original data', 'Dados originais')}"><table><thead><tr><th scope="col">${t('Row', 'Linha')}</th>${columns}</tr></thead><tbody>${content}</tbody></table></div></details>`;
+    return `<div class="table-scroll" role="region" tabindex="0" aria-label="${t('Original data', 'Dados originais')}"><table><thead><tr><th scope="col">${t('Row', 'Linha')}</th>${columns}</tr></thead><tbody>${content}</tbody></table></div>`;
+  }
+
+  function rawDisclosure(rows) {
+    const details = document.createElement('details');
+    details.className = 'raw box';
+    details.id = 'sheet-source';
+    details.innerHTML = `<summary>${t('View original sheet data', 'Ver dados originais da aba')}</summary>`;
+    function load() {
+      if (!details.open) return;
+      details.insertAdjacentHTML('beforeend', rawTable(rows));
+      details.removeEventListener('toggle', load);
+    }
+    details.addEventListener('toggle', load);
+    main.append(details);
   }
 
   function tableFrame(title, placeholder, extra = '') {
@@ -341,7 +361,8 @@ export function mountSkilling(root, api) {
     ${id === 'herblore' ? `<p class="amount-hint">${t('Super Combat uses one Torstol and one each of 4-dose Super attack, strength, and defence. It earns 150 XP and returns two empty vials per mix.',
       'Super Combat usa um Torstol e uma poção de 4 doses de cada tipo: Super attack, strength e defence. Cada mistura concede 150 XP e devolve dois frascos vazios.')}</p>` : ''}
     ${id === 'prayer' ? fossilMarkup(t, prefs, integer) : ''}
-    ${id === 'cons' ? constructionSource() : ''}${rawTable(raw)}`;
+    ${id === 'cons' ? constructionSource() : ''}`;
+    rawDisclosure(raw);
 
     const form = root.querySelector('#planner');
     const inputs = Array.from(form.querySelectorAll('input'));
@@ -471,6 +492,15 @@ export function mountSkilling(root, api) {
       render(false, readView());
       root.querySelector(`[data-protection="${key}"]`).focus();
     });
+    renderMarketView = () => {
+      update();
+      if (id === 'cons') {
+        const source = root.querySelector('#construction-source');
+        const open = source.open;
+        source.outerHTML = constructionSource();
+        root.querySelector('#construction-source').open = open;
+      }
+    };
     update();
   }
 
@@ -484,7 +514,9 @@ export function mountSkilling(root, api) {
       <p class="plan-status" id="level-status" aria-live="polite"></p>
     </form>` : '';
     main.innerHTML = heading(id) + calculator + tableFrame(isXP ? t('Levels 1 to 99', 'Níveis 1 a 99') : t('Exported margins', 'Margens da exportação'),
-      isXP ? t('Filter by level', 'Filtrar por nível') : t('Filter potions', 'Filtrar poções')) + rawTable(raw);
+      isXP ? t('Filter by level', 'Filtrar por nível') : t('Filter potions', 'Filtrar poções'));
+    rawDisclosure(raw);
+    if (!isXP) renderMarketView = () => render(false, readView());
     const filter = root.querySelector('#filter');
     filter.value = view.filter ?? query;
     const usePrices = !isXP && marketQuotes !== null;
@@ -556,13 +588,17 @@ export function mountSkilling(root, api) {
 
   function render(focus = false, view = {}) {
     const [id, query] = currentRoute();
+    renderMarketView = () => {};
     renderChrome();
     renderNavigation(id);
     document.title = id === 'inicio' ? 'Skilling Methods · OSRS Optimized' : `${t(...sections[id].name)} · OSRS Optimized`;
     if (id === 'inicio') overview();
     else if (training.includes(id)) planView(id, query, view);
     else referenceView(id, query, view);
-    for (const id of view.openDetails ?? []) root.querySelector(`#${id}`).open = true;
+    for (const id of view.openDetails ?? []) {
+      const details = document.getElementById(id);
+      if (root.contains(details)) details.open = true;
+    }
     if (focus) {
       window.scrollTo(0, 0);
       main.focus({ preventScroll: true });
@@ -644,22 +680,28 @@ export function mountSkilling(root, api) {
   }
 
   async function updatePrices() {
-    if (priceStatus === 'loading') return;
+    if (priceStatus === 'loading' || Date.now() < nextPriceCheck) return;
     priceStatus = 'loading';
     renderPrices();
     try {
-      const response = await fetch(`${api}prices`, { signal, credentials: 'omit' });
+      const response = await fetch(pricesUrl, { signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), credentials: 'omit' });
       if (!response.ok) throw new Error('Price request failed');
-      const { data } = await response.json();
-      if (!data || !Object.keys(data).length) throw new Error('No quotes returned');
+      const snapshot = parseSnapshot(await response.json());
+      if (!snapshot) throw new Error('Invalid price snapshot');
       if (signal.aborted) return;
-      marketQuotes = data;
-      quoteTime = new Date();
+      const updated = quoteTime !== snapshot.fetchedAt;
+      marketQuotes = snapshot.data;
+      quoteTime = snapshot.fetchedAt;
       priceStatus = 'ready';
-      render(false, readView());
+      nextPriceCheck = Date.now() + 60000;
+      if (updated) {
+        renderMarketView();
+        renderChrome();
+      } else renderPrices();
     } catch {
       if (signal.aborted) return;
       priceStatus = 'error';
+      nextPriceCheck = Date.now() + 15000;
       renderPrices();
     }
   }
@@ -671,8 +713,8 @@ export function mountSkilling(root, api) {
     if (trade[side] === speed) return;
     trade[side] = speed;
     savePreferences(preferences);
-    render(false, readView());
-    if (!marketQuotes) updatePrices();
+    renderPrices();
+    renderMarketView();
   });
   on(root.querySelector('#open-search'), 'click', openSearch);
   on(root.querySelector('#language-toggle'), 'click', (event) => {
@@ -722,6 +764,5 @@ export function mountSkilling(root, api) {
   });
   on(window, 'hashchange', () => render(true));
   render();
-  if (trade.buy !== defaultTrade.buy || trade.sell !== defaultTrade.sell) updatePrices();
   return () => events.abort();
 }

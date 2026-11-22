@@ -1,1 +1,1 @@
-export function mountSkilling(root: HTMLElement, api: string): () => void;
+export function mountSkilling(root: HTMLElement, api: string, pricesUrl: string): () => void;

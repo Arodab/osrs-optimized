@@ -1,5 +1,5 @@
 import { afterTax, buyPrice, materialCost, sellPrice } from './trade.js';
-import currentQuotes from './market-snapshot.json';
+import currentQuotes from './market-snapshot.json' with { type: 'json' };
 
 // Standard potion estimates use 3.15 doses per mix and the sheet's 9.92 GP amulet charge.
 const potion = (xp, base, secondary, output, amulet = true) => ({
@@ -92,6 +92,14 @@ export default (() => {
   };
   const flipping = { 'Super restore': [3026, 3024], 'Sara brew': [6687, 6685], Prayer: [139, 2434] };
   const recipes = { cons: construction, craft: crafting, prayer, herblore };
+  const fossilSupplies = [[21543, 1], [21545, 1]];
+  const itemIds = [
+    ...Object.values(recipes).flatMap((group) => Object.values(group).flatMap(({ inputs, output, byproducts = [] }) =>
+      [...inputs, ...(output ? [output] : []), ...byproducts].map(([id]) => id))),
+    ...wood.flatMap(([plank, nails, , , kit, hull]) => [plank, nails, kit, hull]), 1941,
+    ...Object.values(runecraft).map(([id]) => id), ...Object.values(flipping).flat(),
+    ...fossilSupplies.map(([id]) => id),
+  ];
 
   function recipeValue(quotes, { inputs, output, byproducts = [], fee = 0 }, trade, fixedValue) {
     const cost = materialCost(quotes, inputs, trade);
@@ -143,8 +151,8 @@ export default (() => {
   }
 
   function fossilSupplyPair(quotes, trade) {
-    return materialCost(quotes, [[21543, 1], [21545, 1]], trade) ?? 188;
+    return materialCost(quotes, fossilSupplies, trade) ?? 188;
   }
 
-  return { balancePerXp, boatValue, flip, fossilSupplyPair };
+  return { balancePerXp, boatValue, flip, fossilSupplyPair, itemIds };
 })();

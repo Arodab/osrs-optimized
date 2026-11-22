@@ -86,6 +86,13 @@ describe('share codes', () => {
     expect(decodeSetup('not-a-code!!', equipment)).toBeNull();
     expect(decodeSetup(btoa('999|nope'), equipment)).toBeNull();
   });
+
+  it('ignores retired specs when restoring switches from older share codes', () => {
+    const original = sample();
+    original.switches.retired = { neck: { name: 'Necklace of rupture', version: null } };
+    const decoded = decodeSetup(encodeSetup(original, equipment), equipment)!;
+    expect(Object.keys(decoded.switches)).toEqual(['zcb']);
+  });
 });
 
 describe('share code size', () => {

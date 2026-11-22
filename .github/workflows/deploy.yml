@@ -4,46 +4,71 @@ on:
   push:
     branches: ['main', 'master']
 
+  schedule:
+    - cron: '13,43 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: 'pages'
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reuse compiled site
+        uses: actions/cache/restore@v4
+        id: site-build
+        with:
+          path: dist
+          key: pages-build-${{ runner.os }}-${{ github.sha }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
       - name: Install dependencies
+        if: steps.site-build.outputs.cache-hit != 'true'
         run: npm ci
       - name: Build
+        if: steps.site-build.outputs.cache-hit != 'true'
         run: npm run build
+      - name: Cache compiled site before adding prices
+        if: steps.site-build.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dist
+          key: pages-build-${{ runner.os }}-${{ github.sha }}
+      - name: Include the price snapshot
+        env:
+          REFRESH_PRICES: ${{ github.event_name != 'push' && '--refresh' || '' }}
+        run: node scripts/publish-prices.mjs $REFRESH_PRICES
       - name: Add GitHub Pages deep-link fallback
         run: |
           cp dist/index.html dist/404.html
           mkdir -p dist/skilling
           cp dist/index.html dist/skilling/index.html
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
+          retention-days: 1
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

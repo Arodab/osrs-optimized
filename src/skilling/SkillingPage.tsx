@@ -10,7 +10,8 @@ export default function SkillingPage() {
   useEffect(() => {
     const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     const api = local ? `${import.meta.env.BASE_URL}skilling-api/` : publicApi;
-    if (page.current) return mountSkilling(page.current, api);
+    const pricesUrl = import.meta.env.DEV ? `${api}prices` : `${import.meta.env.BASE_URL}prices.json`;
+    if (page.current) return mountSkilling(page.current, api, pricesUrl);
   }, []);
 
   return (

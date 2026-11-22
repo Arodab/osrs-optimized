@@ -1,4 +1,4 @@
-import quotesSnapshot from './market-snapshot.json';
+import quotesSnapshot from './market-snapshot.json' with { type: 'json' };
 import { materialCost } from './trade.js';
 
 export const treeGroups = {

@@ -2,7 +2,7 @@ import type { Equip, GearSet, Slot } from '../sim/gear';
 import { SLOTS } from '../sim/gear';
 import type { Buffs } from '../sim/modifiers';
 import type { CombatLevels } from '../sim/loadout';
-import { SPECS } from '../sim/specs';
+import { SPECS, specById } from '../sim/specs';
 import type { SpecSwitches } from './setups';
 
 /**
@@ -17,6 +17,11 @@ import type { SpecSwitches } from './setups';
 
 const VERSION = '1';
 const SEP = '|';
+const maxCodeLength = 64 * 1024;
+
+function boundedInt(value: number, min: number, max: number, fallback: number): number {
+  return Number.isSafeInteger(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
 
 export interface TabState {
   gear: GearSet;
@@ -132,6 +137,7 @@ export const encodeSetup = (setup: ShareableSetup, equipment: Equip[]): string =
 /** Returns null for anything that is not a valid code, rather than throwing. */
 export const decodeSetup = (code: string, equipment: Equip[]): DecodedSetup | null => {
   try {
+    if (code.length > maxCodeLength) return null;
     const parts = fromBase64Url(code).split(SEP);
     if (parts[0] !== VERSION || parts.length < 13) return null;
 
@@ -148,9 +154,10 @@ export const decodeSetup = (code: string, equipment: Equip[]): DecodedSetup | nu
     };
 
     const gear: GearSet = {};
-    gearRaw.split(',').forEach((token, i) => {
-      const item = itemFor(token);
-      if (item) gear[SLOTS[i]] = item;
+    const gearTokens = gearRaw.split(',');
+    SLOTS.forEach((slot, i) => {
+      const item = itemFor(gearTokens[i] ?? '');
+      if (item) gear[slot] = item;
     });
 
     const [attack, strength, ranged, magic] = levelsRaw.split(',').map(Number);
@@ -167,18 +174,19 @@ export const decodeSetup = (code: string, equipment: Equip[]): DecodedSetup | nu
     if (optionsRaw) {
       for (const pair of optionsRaw.split(',')) {
         const [key, value] = pair.split(':');
-        if (key) specOptions[key] = value === '1';
+        if (Object.hasOwn(specOptions, key)) specOptions[key] = value === '1';
       }
     }
 
     const switches: SpecSwitches = {};
     if (switchesRaw) {
       for (const entry of switchesRaw.split(',')) {
-        const [specId, slot, token] = entry.split(':');
-        if (!specId || !slot) continue;
+        const [specId, slotName, token] = entry.split(':');
+        const slot = SLOTS.find((candidate) => candidate === slotName);
+        if (!specById(specId) || !slot) continue;
         const item = itemFor(token ?? '');
         switches[specId] = switches[specId] ?? {};
-        switches[specId][slot as Slot] = item ? { name: item.name, version: item.version } : null;
+        switches[specId][slot] = item ? { name: item.name, version: item.version } : null;
       }
     }
     
@@ -189,9 +197,9 @@ export const decodeSetup = (code: string, equipment: Equip[]): DecodedSetup | nu
         return {
           id: crypto.randomUUID(),
           monsterId: mId,
-          styleTab: style as TabKind,
-          count: Number(cnt) || 1,
-          downtimeSeconds: Number(dt) || 0
+          styleTab: style === 'ranged' || style === 'magic' ? style : 'melee',
+          count: boundedInt(Number(cnt), 1, Number.MAX_SAFE_INTEGER, 1),
+          downtimeSeconds: Number.isFinite(Number(dt)) ? Math.max(0, Number(dt)) : 0,
         };
       });
     }
@@ -201,8 +209,8 @@ export const decodeSetup = (code: string, equipment: Equip[]): DecodedSetup | nu
       encounters,
       gear,
       levels: {
-        attack: attack || 99, strength: strength || 99,
-        ranged: ranged || 99, magic: magic || 99,
+        attack: boundedInt(attack, 1, 99, 99), strength: boundedInt(strength, 1, 99, 99),
+        ranged: boundedInt(ranged, 1, 99, 99), magic: boundedInt(magic, 1, 99, 99),
       },
       prayerKey: prayerKey || 'none',
       styleIndex: Number(styleRaw) || 0,
@@ -212,8 +220,8 @@ export const decodeSetup = (code: string, equipment: Equip[]): DecodedSetup | nu
       switches,
       enabledSpecs,
       specOptions,
-      startEnergy: Number.isFinite(startEnergy) ? startEnergy : 100,
-      kills: kills || 1,
+      startEnergy: boundedInt(startEnergy, 0, 100, 100),
+      kills: boundedInt(kills, 1, 200, 1),
       downtimeSeconds: Number.isFinite(downtimeSeconds) ? downtimeSeconds : 0,
       bankingSeconds: Number.isFinite(bankingSeconds) ? bankingSeconds : 0,
       compareLightbearer: lb === 1,

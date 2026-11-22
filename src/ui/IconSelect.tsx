@@ -14,11 +14,11 @@ interface Props {
   ariaLabel: string;
 }
 
-function OptionIcon({ file, fallback }: { file?: string; fallback?: string }) {
+function OptionIcon({ file, fallback, lazy = false }: { file?: string; fallback?: string; lazy?: boolean }) {
   const [failed, setFailed] = useState(false);
   if (!file || failed) return <span className="icon-select-fallback" aria-hidden="true">{fallback ?? '·'}</span>;
   const url = `https://oldschool.runescape.wiki/images/${encodeURIComponent(file.replace(/ /g, '_'))}`;
-  return <img className="icon-select-image" src={url} alt="" onError={() => setFailed(true)} />;
+  return <img className="icon-select-image" src={url} alt="" loading={lazy ? 'lazy' : 'eager'} decoding="async" onError={() => setFailed(true)} />;
 }
 
 export default function IconSelect({ value, options, onChange, ariaLabel }: Props) {
@@ -61,7 +61,7 @@ export default function IconSelect({ value, options, onChange, ariaLabel }: Prop
           window.setTimeout(() => root.current?.querySelector<HTMLButtonElement>('[role="option"]')?.focus(), 0);
         }
       }}>
-      <span className="icon-select-leading"><OptionIcon file={selected?.icon} fallback={selected?.fallback} /></span>
+      <span className="icon-select-leading"><OptionIcon key={selected?.icon} file={selected?.icon} fallback={selected?.fallback} /></span>
       <span className="icon-select-value">{selected?.label ?? ''}</span>
       <span className="icon-select-caret" aria-hidden="true">▾</span>
     </button>
@@ -79,7 +79,7 @@ export default function IconSelect({ value, options, onChange, ariaLabel }: Prop
           }
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); }
         }}>
-        <span className="icon-select-leading"><OptionIcon file={option.icon} fallback={option.fallback} /></span>
+        <span className="icon-select-leading"><OptionIcon file={option.icon} fallback={option.fallback} lazy /></span>
         <span className="icon-select-value">{option.label}</span>
       </button>)}
     </div>}

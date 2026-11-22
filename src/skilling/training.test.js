@@ -3,6 +3,15 @@ import { readAmount } from './amounts.js';
 import { catalog, evaluateMethod, maxXp, methodAccess } from './training.js';
 import { defaultAgility } from './praygility.js';
 import { afterTax, buyPrice, sellPrice } from './trade.js';
+import { parseSnapshot, selectQuotes } from './quote-snapshot.js';
+
+it('retains only requested items and usable quotes in a timestamped snapshot', () => {
+  const fetchedAt = '2026-11-22T03:43:00.000Z';
+  const data = { 229: { high: 4, low: 3, highTime: 1 }, 269: { high: -1, low: '2' }, 999999: { high: 3 } };
+  expect(selectQuotes(data)).toEqual({ 229: { high: 4, low: 3 } });
+  expect(parseSnapshot({ data, fetchedAt }, Date.parse(fetchedAt))).toEqual({ fetchedAt, data: { 229: { high: 4, low: 3 } } });
+  expect(parseSnapshot({ data }, Date.parse(fetchedAt))).toBeNull();
+});
 
 describe('planner amounts', () => {
   it('reads XP shorthand and localized grouping, clipping values above the XP cap', () => {

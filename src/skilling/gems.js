@@ -1,4 +1,4 @@
-import snapshot from './market-snapshot.json';
+import snapshot from './market-snapshot.json' with { type: 'json' };
 import { afterTax, buyPrice, sellPrice } from './trade.js';
 
 // Chisel cutting at 2,700 attempts/h. Semi-precious gems use the Wiki's 1–99 success curve.

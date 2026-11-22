@@ -6,6 +6,13 @@ OSRS tools for comparing special attacks, simulating speedruns, and planning ski
 - [Speedrun](https://arodab.github.io/osrs-optimized/speedrun/)
 - [Skilling Methods](https://arodab.github.io/osrs-optimized/skilling/)
 
+## Data refreshes
+
+GitHub Pages publishes a shared Grand Exchange price snapshot twice an hour. The
+planner's refresh button reads that static file. Ordinary site builds use the
+committed combat data in `public/data`. Run `npm run data` when you intend to
+refresh the combat data from the Wiki and its DPS calculator dataset.
+
 ## SpecScape
 
 Compare OSRS special attacks by the only thing that actually matters: **how much time

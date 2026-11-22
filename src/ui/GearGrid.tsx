@@ -44,6 +44,7 @@ export function ItemIcon({ item, size = 28, lazy = false }: ItemIconProps) {
       width={size}
       height={size}
       loading={lazy ? 'lazy' : 'eager'}
+      decoding="async"
       onError={() => setFailed(true)}
       style={{ maxWidth: size, maxHeight: size, objectFit: 'contain' }}
     />

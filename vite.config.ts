@@ -13,14 +13,21 @@ import react from '@vitejs/plugin-react';
  */
 const base = process.env.BASE ?? '/osrs-optimized/';
 const skillingProxy = `${base.replace(/\/$/, '')}/skilling-api/`;
+const apiOrigin = 'https://osrs-skilling-methods.profoundbadge64.chatgpt.site';
+const policy = ["default-src 'none'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "worker-src 'self'",
+  "img-src 'self' data: https://oldschool.runescape.wiki", `connect-src 'self' ${apiOrigin}`, "base-uri 'none'", "form-action 'none'"].join('; ');
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'production-content-security-policy',
+    apply: 'build',
+    transformIndexHtml: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: policy }, injectTo: 'head-prepend' }],
+  }],
   base,
   server: {
     proxy: {
       [skillingProxy]: {
-        target: 'https://osrs-skilling-methods.profoundbadge64.chatgpt.site',
+        target: apiOrigin,
         changeOrigin: true,
         rewrite: (path) => `/api/${path.slice(skillingProxy.length)}`,
       },

@@ -10,9 +10,11 @@ import { writeFile, mkdir } from 'node:fs/promises';
 const BRANCH = 'main'; // note: the `master` branch of this repo is stale
 const CDN = `https://raw.githubusercontent.com/weirdgloop/osrs-dps-calc/${BRANCH}/cdn/json`;
 const OUT = new URL('../public/data/', import.meta.url);
+const api = 'https://oldschool.runescape.wiki/api.php';
+const requestOptions = { headers: { 'User-Agent': 'OSRS Optimized (https://github.com/Arodab/osrs-optimized; manual combat data update)' }, redirect: 'error' };
 
 const get = async (name) => {
-  const res = await fetch(`${CDN}/${name}`);
+  const res = await fetch(`${CDN}/${name}`, { ...requestOptions, signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
   return res.json();
 };
@@ -194,7 +196,10 @@ async function getCategory(cat) {
   const pages = [];
   let cmcontinue = '';
   while (true) {
-    const res = await fetch(`https://oldschool.runescape.wiki/api.php?action=query&list=categorymembers&cmtitle=${cat}&cmlimit=500&format=json&cmcontinue=${cmcontinue}`);
+    const params = new URLSearchParams({ action: 'query', list: 'categorymembers', cmtitle: cat, cmlimit: '500', format: 'json' });
+    if (cmcontinue) params.set('cmcontinue', cmcontinue);
+    const res = await fetch(`${api}?${params}`, { ...requestOptions, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error(`${cat}: HTTP ${res.status}`);
     const d = await res.json();
     pages.push(...d.query.categorymembers.map((x) => x.title));
     if (!d.continue) break;
