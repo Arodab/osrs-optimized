@@ -1,3 +1,37 @@
+// Standard potion estimates use 3.15 doses per mix and the sheet's 9.92 GP amulet charge.
+const potion = (xp, base, secondary, output, amulet = true) => ({
+  xp, inputs: [[base, 1], [secondary, 1]], output: [output, amulet ? .7875 : .75], fee: amulet ? 9.92 : 0,
+});
+
+export const additionalPotions = {
+  Attack: { level: 3, ...potion(25, 91, 221, 2428) },
+  Strength: { level: 12, ...potion(50, 95, 225, 113) },
+  Restore: { level: 22, ...potion(62.5, 97, 223, 2430) },
+  Energy: { level: 26, ...potion(67.5, 97, 1975, 3008) },
+  'Super attack': { level: 45, ...potion(100, 101, 221, 2436) },
+  'Super energy': { level: 52, ...potion(117.5, 103, 2970, 3016) },
+  'Super strength': { level: 55, ...potion(125, 105, 225, 2440) },
+  'Super defence': { level: 66, ...potion(150, 107, 239, 2442) },
+  Antifire: { level: 69, ...potion(157.5, 2483, 241, 2452) },
+  Stamina: { level: 77, xp: 102, mixesPerHour: 2750, inputs: [[3016, 1], [12640, 4]], output: [12625, 1] },
+  'Super antifire': { level: 92, xp: 130, inputs: [[2452, 1], [21975, 1]], output: [21978, 1] },
+};
+
+// Wiki GE snapshot from 2026-11-21. The refresh button replaces these estimates.
+export const additionalPotionQuotes = {
+  91: { high: 524 }, 221: { high: 5 }, 2428: { low: 9 },
+  95: { high: 404 }, 225: { high: 157 }, 113: { low: 106 },
+  97: { high: 424 }, 223: { high: 144 }, 2430: { low: 63 },
+  1975: { high: 49 }, 3008: { low: 113 },
+  101: { high: 1535 }, 2436: { low: 1450 },
+  103: { high: 1837 }, 2970: { high: 116 }, 3016: { high: 1618, low: 1610 },
+  105: { high: 2534 }, 2440: { low: 3066 },
+  107: { high: 2233 }, 239: { high: 815 }, 2442: { low: 3335 },
+  2483: { high: 1400 }, 241: { high: 70 }, 2452: { high: 645, low: 641 },
+  12640: { high: 403 }, 12625: { low: 2315 },
+  21975: { high: 20590 }, 21978: { low: 18357 },
+};
+
 export default (() => {
   // Plank, nails, quantities per kit batch, and tradeable outputs by wood tier.
   const wood = [
@@ -35,11 +69,8 @@ export default (() => {
     Superior: { xp: 1050, inputs: [[22124, 1]] },
     praygility: { xp: 585, inputs: [[25772, 3], [21880, 1], [566, 1]] },
   };
-  // Keep the sheet's expected 3.15 doses and charge cost for amulet recipes.
-  const potion = (xp, base, secondary, output, amulet = true) => ({
-    xp, inputs: [[base, 1], [secondary, 1]], output: [output, amulet ? .7875 : .75], fee: amulet ? 9.92 : 0,
-  });
   const herblore = {
+    ...additionalPotions,
     'Super restore': potion(142.5, 3004, 223, 3024),
     Ranging: potion(162.5, 109, 245, 2444),
     'Sara brew': potion(180, 3002, 6693, 6685),
@@ -120,5 +151,11 @@ export default (() => {
     return [high3, low3, high4, low4, 3 * afterTax(low4) - 4 * high3];
   }
 
-  return { balancePerXp, boatValue, flip };
+  function fossilSupplyPair(quotes) {
+    const calcite = price(quotes, 21543, 'high');
+    const pyrophosphite = price(quotes, 21545, 'high');
+    return calcite === null || pyrophosphite === null ? 188 : calcite + pyrophosphite;
+  }
+
+  return { balancePerXp, boatValue, flip, fossilSupplyPair };
 })();

@@ -1,10 +1,16 @@
 import sheets from './sheets.json';
 import market from './market.js';
+import { readAmount } from './amounts.js';
+import { catalog, evaluateMethod, maxXp } from './training.js';
+import { loadPreferences, savePreferences, skillPreferences } from './preferences.js';
+import { attachMethodEditor, editorMarkup } from './method-editor.js';
+import { attachFossils, fossilMarkup } from './fossils.js';
 
 export function mountSkilling(root, api) {
   const events = new AbortController();
   const { signal } = events;
   const on = (element, event, handler) => element.addEventListener(event, handler, { signal });
+  const preferences = loadPreferences();
 
   let marketQuotes = null;
   let quoteTime = null;
@@ -25,12 +31,13 @@ export function mountSkilling(root, api) {
     craft: { name: ['Crafting', 'Crafting'], icon: '◇', color: '#efbf9b', description: ['Compare dragonhide bodies and battlestaves by sales channel.', 'Compare dragonhide bodies e battlestaves pelo canal de venda.'] },
     farming: { name: ['Fruit Trees', 'Fruit Trees'], icon: '♣', color: '#abd586', description: ['Compare XP rates for papaya, palm, and magic tree runs.', 'Compare o rendimento de runs de papaya, palm e magic.'] },
     herblore: { name: ['Herblore', 'Herblore'], icon: '⚗', color: '#9dd4b5', description: ['Compare potion costs, returns, and XP rates.', 'Compare o custo, o retorno e o XP das poções da planilha.'] },
-    prayer: { name: ['Prayer', 'Prayer'], icon: '✦', color: '#f0d793', description: ['Compare bones, praygility, and Fossil Island fossils.', 'Compare bones, praygility e fósseis de Fossil Island.'] },
+    prayer: { name: ['Prayer', 'Prayer'], icon: '✦', color: '#f0d793', description: ['Compare regular Prayer training and assess the fossils you own.', 'Compare o treino de Oração e avalie os fósseis que você tem.'] },
     rc: { name: ['Runecraft', 'Runecraft'], icon: '◈', color: '#d0b6ed', description: ['Compare solo routes, runners, and Guardians of the Rift.', 'Compare runs solo, runners e Guardians of the Rift.'] },
     flipping: { name: ['Flipping', 'Flipping'], icon: '◉', color: '#e7bf77', description: ['Check prices and margins for 3-dose and 4-dose potions.', 'Consulte preços e margens de poções de 3 e 4 doses.'] },
     xp: { name: ['XP Table', 'Tabela de XP'], icon: '▤', color: '#a6c9e9', description: ['Look up total XP and calculate the XP between two levels.', 'Consulte o XP acumulado e calcule o XP entre dois níveis.'] },
   };
   const training = ['cons', 'craft', 'farming', 'herblore', 'prayer', 'rc'];
+  const prefsFor = Object.fromEntries(training.map((id) => [id, skillPreferences(preferences, id)]));
   const reference = ['flipping', 'xp'];
   const craftGroups = ['W308 Anvil', 'Grand Exchange'];
   const constructionGroups = {
@@ -80,14 +87,7 @@ export function mountSkilling(root, api) {
   const valueText = (value, format, unit = '') => value === null ? '—' : `${format.format(value || 0)}${unit}`;
   const money = (amount) => amount === null ? '—' : `${amount > 0 ? '+' : ''}${decimal.format(amount || 0)} M`;
 
-  function parseAmount(value, fractionAllowed) {
-    const separator = language === 'pt-BR' ? ',' : '.';
-    const grouped = language === 'pt-BR' ? /^\d{1,3}(?:\.\d{3})+$/ : /^\d{1,3}(?:,\d{3})+$/;
-    const [whole, fraction, extra] = value.trim().split(separator);
-    if (extra !== undefined || (fraction !== undefined && (!fractionAllowed || !/^\d+$/.test(fraction)))) return NaN;
-    if (!/^\d+$/.test(whole) && !grouped.test(whole) && !(whole === '' && fraction)) return NaN;
-    return Number(`${whole.replace(/[.,]/g, '')}.${fraction ?? '0'}`);
-  }
+  const plannerAmount = (value, index) => readAmount(value, language, index === 2 ? 'income' : 'xp');
 
   function renderPrices() {
     const button = root.querySelector('#refresh-prices');
@@ -112,7 +112,8 @@ export function mountSkilling(root, api) {
   }
 
   function methodCount(id) {
-    return sheets[id].methods.length + (id === 'cons' ? constructionMethods.length : 0);
+    const prefs = prefsFor[id];
+    return [...catalog(id, constructionMethods), ...prefs.custom].filter((method) => !prefs.overrides[method.id]?.hidden).length;
   }
 
   function renderNavigation(active) {
@@ -204,7 +205,7 @@ export function mountSkilling(root, api) {
         const x = a.values[column];
         const y = b.values[column];
         if (x === null || y === null) return Number(x === null) - Number(y === null);
-        return direction * (typeof x === 'number' ? x - y : x.localeCompare(y, 'pt-BR'));
+        return direction * (typeof x === 'number' ? x - y : x.localeCompare(y, language));
       });
       body.innerHTML = visible.length
         ? visible.map(({ cells }) => `<tr>${cells.map((cell, index) => index ? `<td>${cell}</td>` : `<th scope="row">${cell}</th>`).join('')}</tr>`).join('')
@@ -282,8 +283,11 @@ export function mountSkilling(root, api) {
   }
 
   function planView(id, query, view) {
-    const { settings, methods, raw } = sheets[id];
-    const [, , initialGP] = settings;
+    const { settings, raw } = sheets[id];
+    const prefs = prefsFor[id];
+    const builtIn = catalog(id, constructionMethods);
+    const allMethods = () => [...builtIn, ...prefs.custom];
+    const persist = () => savePreferences(preferences);
     const fields = [t('Current XP', 'XP atual'), t('XP goal', 'Meta de XP'), t('Alternative income (M GP/h)', 'Renda alternativa (M GP/h)')];
     const groupOptions = id === 'craft'
       ? Object.entries(craftGroups)
@@ -291,12 +295,16 @@ export function mountSkilling(root, api) {
     const segment = groupOptions.length ? `<select id="segment" aria-label="${id === 'craft' ? t('Sales channel', 'Canal de venda') : t('Method group', 'Grupo de métodos')}">
       <option value="all">${id === 'craft' ? t('All channels', 'Todos os canais') : t('All groups', 'Todos os grupos')}</option>
       ${groupOptions.map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select>` : '';
+    const topControls = `<div class="top-control"><button class="ghost" id="top-methods" type="button" aria-pressed="${prefs.top}">${t('Show top', 'Ver melhores')}</button>
+      <input id="top-count" type="number" min="1" max="999" step="1" value="${prefs.topCount}" aria-label="${t('Number of top methods', 'Número de melhores métodos')}"></div>`;
     main.innerHTML = `${heading(id)}${hiscoresForm(id)}<form class="planner box" id="planner" novalidate>
       <div class="planner-head"><h2>${t('XP planner', 'Planejador de XP')}</h2><button class="ghost" type="reset">${t('Restore defaults', 'Restaurar valores')}</button></div>
-      <div class="fields">${fields.map((label, index) => `<label>${label}<input type="text" inputmode="${index === 2 ? 'decimal' : 'numeric'}" data-amount required autocomplete="off" value="${editableNumber.format(settings[index])}"></label>`).join('')}</div>
+      <div class="fields">${fields.map((label, index) => `<label>${label}<input type="text" data-amount required autocomplete="off" value="${editableNumber.format(settings[index])}"></label>`).join('')}</div>
+      <p class="amount-hint">${t('Use k or m, for example 2.5m XP or 750k GP/h.', 'Use k ou m, por exemplo 2,5m de XP ou 750k GP/h.')}</p>
       <p class="plan-status" id="plan-status" aria-live="polite"></p>
-    </form><div class="method-summary" id="metrics"></div>
-    ${tableFrame(t('Method comparison', 'Comparação de métodos'), t('Filter methods', 'Filtrar métodos'), segment)}
+    </form>${editorMarkup(t)}<div class="method-summary" id="metrics"></div>
+    ${tableFrame(t('Method comparison', 'Comparação de métodos'), t('Filter methods', 'Filtrar métodos'), segment + topControls)}
+    ${id === 'prayer' ? fossilMarkup(t, prefs, integer) : ''}
     ${id === 'cons' ? constructionSource() : ''}${rawTable(raw)}`;
 
     const form = root.querySelector('#planner');
@@ -305,6 +313,8 @@ export function mountSkilling(root, api) {
     const metrics = root.querySelector('#metrics');
     const filter = root.querySelector('#filter');
     const channel = root.querySelector('#segment');
+    const topButton = root.querySelector('#top-methods');
+    const topCount = root.querySelector('#top-count');
     const playerForm = root.querySelector('#hiscores');
     playerForm.elements.player.addEventListener('input', (event) => { playerName = event.target.value; });
     playerForm.addEventListener('submit', loadPlayer);
@@ -316,47 +326,35 @@ export function mountSkilling(root, api) {
     const inChannel = (group) => !channel || channel.value === 'all' || channel.value === String(group);
     const labels = [t('Method', 'Método'), 'XP/h', t('Training (h)', 'Treino (h)'), t('GP time (h)', 'Tempo de GP (h)'),
       t('Adjusted time (h)', 'Tempo ajustado (h)'), t('Net GP', 'Saldo (GP)')];
-    if (id === 'cons') labels.push(t('Level', 'Nível'));
+    labels.push(t('Level req.', 'Nível exigido'), 'GP/XP');
     if (id === 'craft') labels.push(t('Sales channel', 'Canal de venda'));
-    const table = makeTable(labels, (row) => inChannel(row.group) && normalize(row.values[0]).includes(normalize(filter.value)),
-      4, { 1: -1, 5: -1 }, view.sort);
+    const groupLabel = (group) => id === 'craft' ? craftGroups[group] ?? t('Custom', 'Personalizado') : '';
+    let visibleIds = new Set();
+    const table = makeTable(labels, (row) => visibleIds.has(row.id), 4, { 1: -1, 5: -1, 7: -1 }, view.sort);
+    const save = () => { persist(); update(); };
+    attachMethodEditor({ form: root.querySelector('#edit-method'), methods: allMethods, prefs, t, language,
+      format: (value) => editableNumber.format(value), escape: escapeHtml, groupLabel, onSave: save, selected: view.editor });
+    const updateFossils = id === 'prayer' ? attachFossils({ section: root.querySelector('#fossils'), prefs, t,
+      integer, decimal, escape: escapeHtml, onSave: persist, onChange: update }) : null;
 
     function update() {
-      const [current, goal, gp] = inputs.map((input, index) => parseAmount(input.value, index === 2));
-      const isXp = (xp) => Number.isInteger(xp) && xp >= 0 && xp <= 200000000;
+      const [current, goal, gp] = inputs.map((input, index) => plannerAmount(input.value, index));
+      const isXp = (xp) => Number.isInteger(xp) && xp >= 0 && xp <= maxXp;
       const validFields = [isXp(current), isXp(goal), Number.isFinite(gp) && gp >= .001 && gp <= 100000];
       const valid = validFields.every(Boolean);
       inputs.forEach((input, index) => input.setAttribute('aria-invalid', String(!validFields[index])));
       const remaining = Math.max(0, goal - current);
-      const ratio = remaining / (settings[1] - settings[0]);
-      const gpRatio = initialGP / gp;
-      const matches = methods.map(([name, rate, trainingHours, earn, total, cost, group]) => {
-        const practice = valid ? trainingHours * ratio : null;
-        const groupKey = id === 'cons' ? 'sheet' : group;
-        const netPerXp = market.balancePerXp(marketQuotes, id, name, group, rate);
-        if (netPerXp !== null) {
-          const balance = valid ? netPerXp * remaining / 1000000 : null;
-          const gpHours = valid ? -balance / gp : null;
-          return { name, rate, practice, gpHours, combined: valid ? practice + gpHours : null, balance, group: groupKey, level: null, wikiPriced: true };
-        }
-        const gpHours = valid && earn !== null ? earn * ratio * gpRatio : null;
-        const combined = valid ? (total + (earn ?? 0) * (gpRatio - 1)) * ratio : null;
-        const balance = valid && cost !== null ? -cost * ratio : null;
-        return { name, rate, practice, gpHours, combined, balance, group: groupKey, level: null, wikiPriced: false };
+      const matches = allMethods().filter((method) => !prefs.overrides[method.id]?.hidden).map((method) => {
+        const rate = prefs.overrides[method.id]?.rate;
+        const override = Number.isFinite(rate) && rate > 0 ? rate : undefined;
+        return evaluateMethod(method, id, settings, marketQuotes, { remaining, gp, valid }, override);
       });
-      if (id === 'cons') {
-        for (const method of constructionMethods) {
-          const practice = valid ? remaining / method.rate : null;
-          const amounts = market.boatValue(marketQuotes, method.group, method.tier, method.quantity);
-          const netPerXp = amounts ? (amounts.value - amounts.materials) / method.xp : method.balancePerXp;
-          const balance = valid ? remaining * netPerXp / 1000000 : null;
-          const gpHours = valid ? -balance / gp : null;
-          const combined = valid ? practice + gpHours : null;
-          matches.push({ ...method, practice, gpHours, combined, balance, wikiPriced: amounts !== null });
-        }
-      }
-      const options = matches.filter((method) => inChannel(method.group) && normalize(method.name).includes(normalize(filter.value)));
-      const quickest = options.reduce((best, method) => !best || method.combined < best.combined ? method : best, null);
+      const query = normalize(filter.value);
+      const ranked = matches.filter((method) => inChannel(method.group) && normalize(method.name).includes(query))
+        .sort((a, b) => (a.combined ?? Infinity) - (b.combined ?? Infinity) || b.rate - a.rate);
+      const options = prefs.top ? ranked.slice(0, prefs.topCount) : ranked;
+      visibleIds = new Set(options.map(({ id }) => id));
+      const quickest = options.find((method) => method.combined !== null);
       const topRate = options.reduce((best, method) => !best || method.rate > best.rate ? method : best, null);
       const bestBalance = options.filter((method) => method.balance !== null)
         .reduce((best, method) => !best || method.balance > best.balance ? method : best, null);
@@ -372,28 +370,33 @@ export function mountSkilling(root, api) {
       table(matches.map((method) => {
         const badge = valid && remaining && method === quickest ? ` <span class="tag">${t('Shortest time', 'Menor tempo')}</span>` : '';
         const values = [method.name, method.rate, method.practice, method.gpHours, method.combined, method.balance];
-        const originalPrice = marketQuotes && !method.wikiPriced ? `<sup class="quote-source" title="${t('Source price', 'Preço original')}">*</sup>` : '';
+        const originalPrice = marketQuotes && !method.wikiPriced && !method.custom ? `<sup class="quote-source" title="${t('Source price', 'Preço original')}">*</sup>` : '';
         const cells = [`<span class="row-name">${escapeHtml(method.name)}${badge}</span>`, integer.format(method.rate),
           valueText(method.practice, decimal), valueText(method.gpHours, decimal), valueText(method.combined, decimal),
           `<span class="${method.balance > 0 ? 'good' : method.balance < 0 ? 'warn' : ''}">${money(method.balance)}</span>${originalPrice}`];
-        if (id === 'cons') {
-          values.push(method.level);
-          cells.push(valueText(method.level, integer));
-        }
+        values.push(method.level, method.netPerXp);
+        cells.push(`${integer.format(method.level)}${method.magic ? ` ${t('Magic', 'Magia')}` : ''}`, valueText(method.netPerXp, decimal));
         if (id === 'craft') {
-          values.push(craftGroups[method.group]);
-          cells.push(craftGroups[method.group]);
+          values.push(groupLabel(method.group));
+          cells.push(groupLabel(method.group));
         }
-        return { values, cells, group: method.group };
-      }), marketQuotes ? t('Wiki quotes use instant buy and sell prices, including seller tax. * Source estimate.',
+        return { id: method.id, values, cells };
+      }), prefs.top ? t('Showing the shortest adjusted times among matching methods.', 'Exibindo os menores tempos ajustados entre os métodos filtrados.')
+        : marketQuotes ? t('Wiki quotes use instant buy and sell prices, including seller tax. * Source estimate.',
         'Cotações da Wiki usam preços de compra e venda imediatas, com imposto de venda. * Estimativa original.')
         : t('Adjusted time includes the hours needed to earn GP and subtracts the equivalent hours for a profit.',
           'O tempo ajustado inclui as horas necessárias para obter GP e desconta as horas equivalentes ao lucro.'));
+      updateFossils?.({ current, remaining, gp, valid, quotes: marketQuotes, methods: matches });
     }
     form.addEventListener('submit', (event) => event.preventDefault());
-    form.addEventListener('input', update);
+    form.addEventListener('input', () => {
+      for (const input of inputs.slice(0, 2)) {
+        if (plannerAmount(input.value, 0) === maxXp) input.value = editableNumber.format(maxXp);
+      }
+      update();
+    });
     inputs.forEach((input, index) => input.addEventListener('blur', () => {
-      if (input.getAttribute('aria-invalid') === 'false') input.value = editableNumber.format(parseAmount(input.value, index === 2));
+      if (input.getAttribute('aria-invalid') === 'false') input.value = editableNumber.format(plannerAmount(input.value, index));
     }));
     form.addEventListener('reset', (event) => {
       event.preventDefault();
@@ -402,6 +405,17 @@ export function mountSkilling(root, api) {
     });
     filter.addEventListener('input', update);
     channel?.addEventListener('change', update);
+    topButton.addEventListener('click', () => {
+      prefs.top = !prefs.top;
+      topButton.setAttribute('aria-pressed', String(prefs.top));
+      save();
+    });
+    topCount.addEventListener('input', () => {
+      if (!topCount.validity.valid || !topCount.value) return;
+      prefs.topCount = topCount.valueAsNumber;
+      save();
+    });
+    topCount.addEventListener('blur', () => { topCount.value = prefs.topCount; });
     update();
   }
 
@@ -423,11 +437,16 @@ export function mountSkilling(root, api) {
       : usePrices ? [t('Potion', 'Poção'), t('3-dose buy', 'Compra 3 doses'), t('3-dose sell', 'Venda 3 doses'),
         t('4-dose buy', 'Compra 4 doses'), t('4-dose sell', 'Venda 4 doses'), t('Net per batch (GP)', 'Saldo por lote (GP)')]
       : [t('Potion', 'Poção'), '3 doses · 1', '3 doses · 2', '4 doses · 1', '4 doses · 2', t('Profit (k GP)', 'Lucro (mil GP)')];
+    if (!isXP) labels.push(t('Level req.', 'Nível exigido'));
     const table = makeTable(labels, ({ values }) => normalize(values[0]).includes(normalize(filter.value)), isXP ? 0 : 5, { 5: -1 }, view.sort);
     const displayRows = rows.map((row) => {
-      const values = usePrices ? [row[0], ...(market.flip(marketQuotes, row[0]) ?? Array(5).fill(null))] : row;
+      const values = usePrices ? [row[0], ...(market.flip(marketQuotes, row[0]) ?? Array(5).fill(null))] : [...row];
       const cells = values.map((value, index) => typeof value === 'string'
         ? `<span class="row-name">${escapeHtml(value)}</span>` : valueText(value, isXP && index === 3 ? precise : decimal));
+      if (!isXP) {
+        values.push(null);
+        cells.push(t('None', 'Nenhum'));
+      }
       return { values, cells };
     });
     const note = isXP ? '' : usePrices
@@ -503,10 +522,11 @@ export function mountSkilling(root, api) {
       const entries = section.name.some((name) => normalize(name).includes(query))
         ? [{ id, name: sectionName, context: t('Sheet', 'Aba') }] : [];
       if (query && id !== 'xp') {
-        const matches = new Set((sheets[id].methods ?? sheets[id].rows).map(([name]) => name));
-        if (id === 'cons') {
-          for (const method of constructionMethods) matches.add(method.name);
-        }
+        const prefs = prefsFor[id];
+        const names = prefs ? [...catalog(id, constructionMethods), ...prefs.custom]
+          .filter((method) => !prefs.overrides[method.id]?.hidden).map(({ name }) => name)
+          : sheets[id].rows.map(([name]) => name);
+        const matches = new Set(names);
         for (const name of matches) if (normalize(name).includes(query)) entries.push({ id, name, context: sectionName, query: name });
       }
       if (id === 'xp' && level >= 1 && level <= 99) entries.push({ id, name: `${t('Level', 'Nível')} ${Number(level)}`, context: sectionName, query: String(Number(level)) });
@@ -528,6 +548,7 @@ export function mountSkilling(root, api) {
     const inputs = Array.from(main.querySelectorAll('#planner input, #level-calculator input'), (input) => input.value);
     return {
       inputs: inputs.length ? inputs : undefined,
+      editor: main.querySelector('#edit-method select')?.value,
       filter: main.querySelector('#filter')?.value,
       channel: main.querySelector('#segment')?.value,
       openDetails: Array.from(main.querySelectorAll('details[open]'), (details) => details.id),
@@ -592,7 +613,7 @@ export function mountSkilling(root, api) {
     if (main.querySelector('#planner')) {
       const nextFormat = new Intl.NumberFormat(next, { maximumFractionDigits: 20 });
       view.inputs = view.inputs.map((value, index) => {
-        const amount = parseAmount(value, index === 2);
+        const amount = plannerAmount(value, index);
         return Number.isFinite(amount) ? nextFormat.format(amount) : value;
       });
     }
