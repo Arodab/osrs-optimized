@@ -1040,8 +1040,16 @@ export default function App() {
           >
             <span className="page-nav-icon">◷</span><span className="page-nav-label">Speedrun</span>
           </button>
+          <a
+            className="page-nav-item"
+            href="https://osrs-skilling-methods.profoundbadge64.chatgpt.site/"
+            aria-label="Skilling Methods"
+            title="Skilling Methods"
+          >
+            <span className="page-nav-icon" aria-hidden="true">✦</span><span className="page-nav-label">Skilling Methods</span>
+          </a>
         </nav>
-        <div className="sidebar-footer"><span className="page-nav-icon">OSRS</span><span className="page-nav-label">Combat tools</span></div>
+        <div className="sidebar-footer"><span className="page-nav-icon">OSRS</span><span className="page-nav-label">Tools</span></div>
       </aside>
       <div className="app">
       <header className="top-bar">

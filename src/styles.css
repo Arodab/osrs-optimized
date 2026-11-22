@@ -50,7 +50,7 @@ body {
 .sidebar-brand-name { overflow: hidden; }
 .sidebar-collapse { margin: 16px 0 12px; height: 30px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--panel); font-size: 19px; line-height: 1; }
 .page-nav { display: grid; gap: 6px; }
-.page-nav-item { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--muted); text-align: left; background: transparent; white-space: nowrap; }
+.page-nav-item { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--muted); text-align: left; text-decoration: none; background: transparent; white-space: nowrap; }
 .page-nav-item:hover { color: var(--text); background: var(--panel); }
 .page-nav-item.active { color: var(--text); border-color: rgba(230,57,57,.35); background: rgba(230,57,57,.12); }
 .page-nav-icon { display: inline-grid; flex: 0 0 20px; width: 20px; place-items: center; color: var(--accent); font-weight: 700; }
