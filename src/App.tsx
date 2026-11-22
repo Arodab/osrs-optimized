@@ -33,11 +33,27 @@ import type { Monster, MonsterState, SpecResult, SimEncounter } from './sim/type
 import type { CombatLevels } from './sim/loadout';
 import type { SequenceAttack } from './sim/sequence';
 import { SimPool, type SimProgress, type SimVariant } from './ui/simPool';
-import monstersData from '../public/data/monsters.json';
-import equipmentData from '../public/data/equipment.json';
-import spellsData from '../public/data/spells.json';
 
 export type CombatPage = 'specscape' | 'speedrun';
+
+let gameData: Promise<[Monster[], Equip[], Spell[]]> | undefined;
+
+async function readCombatData<T>(file: string): Promise<T[]> {
+  const response = await fetch(`${import.meta.env.BASE_URL}data/${file}`, { signal: AbortSignal.timeout(12000) });
+  if (!response.ok) throw new Error('Combat data unavailable');
+  const data: unknown = await response.json();
+  if (!Array.isArray(data) || !data.length) throw new Error('Combat data is invalid');
+  return data;
+}
+
+function loadCombatData() {
+  gameData ??= Promise.all([readCombatData<Monster>('monsters.json'), readCombatData<Equip>('equipment.json'),
+    readCombatData<Spell>('spells.json')]).catch((error: unknown) => {
+    gameData = undefined;
+    throw error;
+  });
+  return gameData;
+}
 
 const monsterLabel = (m: Monster) => (m.version ? `${m.name} (${m.version})` : m.name);
 const downloadJson = (name: string, data: unknown) => {
@@ -131,6 +147,8 @@ export default function App({ activePage, hidden }: { activePage: CombatPage; hi
   const [equipment, setEquipment] = useState<Equip[]>([]);
   const [spells, setSpells] = useState<Spell[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const [encounters, setEncounters] = useState<EncounterDef[]>([{ id: crypto.randomUUID(), monsterId: DEFAULT_MONSTER, styleTab: 'melee', count: 1, downtimeSeconds: 0 }]);
   const [speedrunMonsterId, setSpeedrunMonsterId] = useState(DEFAULT_MONSTER);
@@ -219,11 +237,18 @@ export default function App({ activePage, hidden }: { activePage: CombatPage; hi
 
   // ---- data loading -------------------------------------------------------
   useEffect(() => {
-    setMonsters(monstersData as unknown as Monster[]);
-    setEquipment(equipmentData as Equip[]);
-    setSpells(spellsData as Spell[]);
-    setLoading(false);
-  }, []);
+    let active = true;
+    loadCombatData().then(([nextMonsters, nextEquipment, nextSpells]) => {
+      if (!active) return;
+      setMonsters(nextMonsters);
+      setEquipment(nextEquipment);
+      setSpells(nextSpells);
+      setLoading(false);
+    }, () => {
+      if (active) setLoadError(true);
+    });
+    return () => { active = false; };
+  }, [loadAttempt]);
 
   useEffect(() => { setSaved(listSetups()); }, []);
 
@@ -979,7 +1004,12 @@ export default function App({ activePage, hidden }: { activePage: CombatPage; hi
         : null
     : null;
 
-  if (loading) return <div className="app" hidden={hidden}><p>Loading game data...</p></div>;
+  if (loading) return <div className="app" hidden={hidden}>
+    {loadError ? <><p role="status">Game data is unavailable.</p><button type="button" onClick={() => {
+      setLoadError(false);
+      setLoadAttempt((attempt) => attempt + 1);
+    }}>Retry</button></> : <p role="status">Loading game data…</p>}
+  </div>;
 
   return (
     <div className="app" hidden={hidden}>
