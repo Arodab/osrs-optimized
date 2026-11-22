@@ -11,8 +11,20 @@ import react from '@vitejs/plugin-react';
  * BASE=/ (in Git Bash use MSYS_NO_PATHCONV=1, which otherwise rewrites a bare
  * "/" into a Windows path).
  */
+const base = process.env.BASE ?? '/osrs-optimized/';
+const skillingProxy = `${base.replace(/\/$/, '')}/skilling-api/`;
+
 export default defineConfig({
   plugins: [react()],
-  base: process.env.BASE ?? '/osrs-optimized/',
+  base,
+  server: {
+    proxy: {
+      [skillingProxy]: {
+        target: 'https://osrs-skilling-methods.profoundbadge64.chatgpt.site',
+        changeOrigin: true,
+        rewrite: (path) => `/api/${path.slice(skillingProxy.length)}`,
+      },
+    },
+  },
   worker: { format: 'es' },
 });

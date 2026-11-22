@@ -37,11 +37,7 @@ import monstersData from '../public/data/monsters.json';
 import equipmentData from '../public/data/equipment.json';
 import spellsData from '../public/data/spells.json';
 
-type ToolPage = 'specscape' | 'speedrun';
-const projectBase = import.meta.env.BASE_URL.replace(/\/$/, '');
-const toolPath = (page: ToolPage) => `${projectBase}/${page}/`;
-const pageFromLocation = (): ToolPage =>
-  window.location.pathname.startsWith(`${projectBase}/speedrun`) ? 'speedrun' : 'specscape';
+export type CombatPage = 'specscape' | 'speedrun';
 
 const monsterLabel = (m: Monster) => (m.version ? `${m.name} (${m.version})` : m.name);
 const downloadJson = (name: string, data: unknown) => {
@@ -130,34 +126,11 @@ const defaultSpeedrunTab = (equipment: Equip[]): LoadoutTab => {
   return tab;
 };
 
-export default function App() {
-  const [activePage, setActivePage] = useState<ToolPage>(pageFromLocation);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+export default function App({ activePage, hidden }: { activePage: CombatPage; hidden: boolean }) {
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [equipment, setEquipment] = useState<Equip[]>([]);
   const [spells, setSpells] = useState<Spell[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const navigatePage = useCallback((page: ToolPage) => {
-    if (window.location.pathname !== toolPath(page)) window.history.pushState(null, '', toolPath(page));
-    setActivePage(page);
-  }, []);
-
-  useEffect(() => {
-    const normalizeRoute = () => {
-      const page = pageFromLocation();
-      if (window.location.pathname !== toolPath(page)) window.history.replaceState(null, '', toolPath(page));
-      setActivePage(page);
-    };
-    const onPopState = () => setActivePage(pageFromLocation());
-    normalizeRoute();
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
-
-  useEffect(() => {
-    document.title = `${activePage === 'speedrun' ? 'Speedrun' : 'SpecScape'} · OSRS Optimized`;
-  }, [activePage]);
 
   const [encounters, setEncounters] = useState<EncounterDef[]>([{ id: crypto.randomUUID(), monsterId: DEFAULT_MONSTER, styleTab: 'melee', count: 1, downtimeSeconds: 0 }]);
   const [speedrunMonsterId, setSpeedrunMonsterId] = useState(DEFAULT_MONSTER);
@@ -1006,52 +979,10 @@ export default function App() {
         : null
     : null;
 
-  if (loading) return <div className="app"><p>Loading game data...</p></div>;
+  if (loading) return <div className="app" hidden={hidden}><p>Loading game data...</p></div>;
 
   return (
-    <div className={`app-shell ${navCollapsed ? 'nav-collapsed' : ''}`}>
-      <aside className="site-sidebar" aria-label="Site pages">
-        <div className="sidebar-brand"><span className="sidebar-mark">O</span><span className="sidebar-brand-name">OSRS Optimized</span></div>
-        <button
-          className="sidebar-collapse"
-          type="button"
-          aria-label={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-          aria-expanded={!navCollapsed}
-          onClick={() => setNavCollapsed((collapsed) => !collapsed)}
-        >
-          {navCollapsed ? '›' : '‹'}
-        </button>
-        <nav className="page-nav">
-          <button
-            type="button"
-            className={`page-nav-item ${activePage === 'specscape' ? 'active' : ''}`}
-            aria-current={activePage === 'specscape' ? 'page' : undefined}
-            title="SpecScape"
-            onClick={() => navigatePage('specscape')}
-          >
-            <span className="page-nav-icon">⚔</span><span className="page-nav-label">SpecScape</span>
-          </button>
-          <button
-            type="button"
-            className={`page-nav-item ${activePage === 'speedrun' ? 'active' : ''}`}
-            aria-current={activePage === 'speedrun' ? 'page' : undefined}
-            title="Speedrun"
-            onClick={() => navigatePage('speedrun')}
-          >
-            <span className="page-nav-icon">◷</span><span className="page-nav-label">Speedrun</span>
-          </button>
-          <a
-            className="page-nav-item"
-            href="https://osrs-skilling-methods.profoundbadge64.chatgpt.site/"
-            aria-label="Skilling Methods"
-            title="Skilling Methods"
-          >
-            <span className="page-nav-icon" aria-hidden="true">✦</span><span className="page-nav-label">Skilling Methods</span>
-          </a>
-        </nav>
-        <div className="sidebar-footer"><span className="page-nav-icon">OSRS</span><span className="page-nav-label">Tools</span></div>
-      </aside>
-      <div className="app">
+    <div className="app" hidden={hidden}>
       <header className="top-bar">
         <div className="header-text">
           <h1>{activePage === 'speedrun' ? 'Speedrun' : 'SpecScape'}</h1>
@@ -1683,7 +1614,6 @@ Click for the kill-time distribution`}
         <a href="https://github.com/weirdgloop/osrs-dps-calc" target="_blank" rel="noreferrer">wiki DPS calculator</a>{' '}
         dataset. Item images are served from the wiki. Not affiliated with Jagex.
       </footer>
-      </div>
     </div>
   );
 }

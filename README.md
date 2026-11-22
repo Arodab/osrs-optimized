@@ -4,7 +4,7 @@ OSRS tools for comparing special attacks, simulating speedruns, and planning ski
 
 - [SpecScape](https://arodab.github.io/osrs-optimized/specscape/)
 - [Speedrun](https://arodab.github.io/osrs-optimized/speedrun/)
-- [Skilling Methods](https://osrs-skilling-methods.profoundbadge64.chatgpt.site/)
+- [Skilling Methods](https://arodab.github.io/osrs-optimized/skilling/)
 
 ## SpecScape
 

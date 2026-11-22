@@ -1,0 +1,167 @@
+.skilling-page {
+  width: 100%;
+  --panel-raised: var(--panel-2);
+  --gold: #edbe70;
+  --green: var(--good);
+  --danger: #ffc2a3;
+  --heading: system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 16px;
+}
+.skilling-page #navigation { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
+.skilling-page .nav-group { display: contents; }
+.skilling-page .nav-label { display: none; }
+.skilling-page a { color: inherit; text-decoration: none; }
+.skilling-page button, .skilling-page input, .skilling-page select { font: inherit; }
+.skilling-page button { cursor: pointer; }
+.skilling-page :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.skilling-page .skip { position: fixed; left: 1rem; top: 1rem; z-index: 5; padding: .5rem 1rem; background: var(--gold); color: #141511; transform: translateY(-200%); }
+.skilling-page .skip:focus { transform: translateY(0); }
+.skilling-page .nav-link { display: flex; align-items: center; gap: .65rem; min-height: 40px; border: 1px solid transparent; border-radius: 7px; padding: .35rem .62rem; font-size: .91rem; color: var(--muted); }
+.skilling-page .nav-link:hover { color: var(--text); background: var(--panel); }
+.skilling-page .nav-link[aria-current="page"] { color: var(--gold); background: #322b20; border-color: #55442c; }
+.skilling-page .nav-icon { color: var(--accent, var(--gold)); width: 1.4rem; text-align: center; flex: 0 0 auto; font-size: 1.06rem; }
+.skilling-page .skilling-topbar { min-height: 52px; padding: .35rem .75rem; margin: 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.skilling-page .breadcrumb { color: var(--muted); margin: 0; font-size: .89rem; }
+.skilling-page .top-actions { display: flex; align-items: center; gap: .55rem; }
+.skilling-page .market-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .75rem; min-height: 48px; padding: .45rem .75rem; border-bottom: 1px solid var(--line); }
+.skilling-page .price-button { color: var(--gold); white-space: nowrap; background: #322b20; border: 1px solid #665437; border-radius: 7px; padding: .35rem .65rem; font-size: .88rem; font-weight: 600; }
+.skilling-page .price-button:hover { background: #3d3322; border-color: var(--gold); }
+.skilling-page .price-button:disabled { cursor: wait; opacity: .65; }
+.skilling-page .market-status, .skilling-page .market-link { color: var(--muted); font-size: .85rem; }
+.skilling-page .market-link { margin-left: auto; text-decoration: underline; text-underline-offset: .18em; }
+.skilling-page .search-trigger { display: flex; align-items: center; gap: .6rem; padding: .45rem .7rem; color: var(--muted); border: 1px solid var(--line); background: var(--panel); border-radius: 7px; font-size: .87rem; white-space: nowrap; }
+.skilling-page .search-trigger:hover, .skilling-page .ghost:hover { border-color: var(--gold); color: var(--text); }
+.skilling-page .lens { width: .79rem; height: .79rem; border: 1.5px solid currentColor; border-radius: 50%; position: relative; margin-right: .2rem; }
+.skilling-page .lens::after { content: ''; position: absolute; width: .42rem; height: 1.5px; background: currentColor; transform: rotate(45deg); left: .56rem; top: .62rem; }
+.skilling-page kbd { font: .74rem var(--mono); border: 1px solid #4b4e40; padding: .11rem .27rem; border-radius: 4px; }
+.skilling-page .language-toggle { display: flex; padding: .14rem; gap: .1rem; border: 1px solid var(--line); background: var(--panel); border-radius: 7px; }
+.skilling-page .language-toggle button { padding: .25rem .4rem; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font: 700 .8rem/1.5 'Segoe UI', system-ui, sans-serif; white-space: nowrap; }
+.skilling-page .language-toggle button:hover { color: var(--text); }
+.skilling-page .language-toggle button[aria-pressed="true"] { color: var(--gold); background: #3a3021; }
+.skilling-page #skilling-content { flex: 1; width: min(100%, 1500px); margin-inline: auto; padding: 1.25rem 0; min-width: 0; }
+.skilling-page #skilling-content:focus { outline: 0; }
+.skilling-page h1, .skilling-page h2, .skilling-page h3, .skilling-page p { margin-top: 0; }
+.skilling-page h1, .skilling-page h2 { font-family: var(--heading); line-height: 1.12; }
+.skilling-page h1 { font-size: clamp(2.05rem, 5vw, 4.65rem); letter-spacing: -.045em; margin-bottom: .75rem; }
+.skilling-page h2 { font-size: 1.68rem; margin-bottom: .65rem; }
+.skilling-page h3 { font-size: 1.09rem; margin-bottom: .35rem; }
+.skilling-page .muted { color: var(--muted); }
+.skilling-page .hero { position: relative; isolation: isolate; overflow: hidden; min-height: 273px; display: grid; align-items: center; padding: clamp(1.25rem, 4vw, 3.25rem); border: 1px solid #57513b; border-radius: 14px; background: radial-gradient(ellipse at 84% 35%, #4c422b 0, #303124 40%, #23261d 77%); }
+.skilling-page .hero-copy { position: relative; z-index: 1; max-width: 36rem; }
+.skilling-page .hero p { max-width: 31rem; color: #dfdccd; margin-bottom: 0; }
+.skilling-page .hero h1 { max-width: 9ch; }
+.skilling-page .hero-art { position: absolute; right: 8%; top: 50%; transform: translateY(-50%); width: min(33%, 265px); aspect-ratio: 1; display: grid; place-items: center; border: 1px solid #c8a36966; border-radius: 50%; color: var(--gold); background: radial-gradient(circle, #edbe7022, transparent 70%); }
+.skilling-page .hero-art::before, .skilling-page .hero-art::after { content: ''; position: absolute; inset: 12%; border: 1px solid #c8a36966; transform: rotate(45deg); }
+.skilling-page .hero-art::after { inset: 21%; transform: none; border-radius: 50%; border-style: dashed; }
+.skilling-page .hero-art span { font: normal clamp(3rem, 11vw, 9rem)/1 var(--heading); text-shadow: 0 0 30px #efbc6c55; }
+.skilling-page .overview-section { margin-top: 2rem; }
+.skilling-page .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin-bottom: .8rem; }
+.skilling-page .section-head h2 { margin: 0; }
+.skilling-page .section-head span { color: var(--muted); font-size: .88rem; }
+.skilling-page .card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
+.skilling-page .reference-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.skilling-page .skill-card { display: flex; flex-direction: column; min-width: 0; min-height: 148px; padding: 1rem; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; }
+.skilling-page .skill-card:hover { border-color: var(--accent); background: var(--panel-raised); }
+.skilling-page .card-top { display: flex; align-items: center; gap: .7rem; margin-bottom: .65rem; }
+.skilling-page .card-top h3 { margin: 0; font: bold 1.2rem/1.2 var(--heading); }
+.skilling-page .card-icon { flex: 0 0 auto; display: grid; place-items: center; width: 2.2rem; height: 2.2rem; color: var(--accent); font-size: 1.2rem; border-radius: 7px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 27%, var(--panel)); }
+.skilling-page .skill-card p { margin: 0 0 .6rem; color: var(--muted); font-size: .9rem; }
+.skilling-page .card-meta { margin-top: auto; color: var(--accent); font: .82rem var(--mono); }
+.skilling-page .page-heading { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.35rem; }
+.skilling-page .page-heading h1 { margin-bottom: .3rem; font-size: clamp(2.25rem, 4vw, 3.6rem); }
+.skilling-page .page-heading p { margin: 0; color: var(--muted); }
+.skilling-page .page-heading .card-icon { width: 3.2rem; height: 3.2rem; font-size: 1.7rem; }
+.skilling-page .box { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; min-width: 0; }
+.skilling-page .planner { padding: 1.05rem 1.15rem; margin-bottom: 1rem; }
+.skilling-page .planner-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .85rem; }
+.skilling-page .planner-head h2 { margin: 0; font-size: 1.4rem; }
+.skilling-page .ghost { color: var(--muted); border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: .27rem .55rem; font-size: .87rem; }
+.skilling-page .fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.skilling-page .fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.skilling-page label { display: grid; gap: .3rem; margin: 0; color: var(--muted); font-size: .87rem; }
+.skilling-page input, .skilling-page select { min-width: 0; width: 100%; color: var(--text); border: 1px solid #4c4e40; background: #191919; padding: .45rem .65rem; border-radius: 6px; }
+.skilling-page input[type="number"], .skilling-page input[data-amount] { font: .94rem var(--mono); min-height: 2.35rem; }
+.skilling-page input[aria-invalid="true"] { border-color: var(--danger); }
+.skilling-page .plan-status { font-size: .88rem; color: var(--muted); margin: .65rem 0 0; }
+.skilling-page .plan-status strong { color: var(--gold); }
+.skilling-page .plan-status.error { color: var(--danger); }
+.skilling-page .hiscores { display: flex; flex-wrap: wrap; align-items: end; gap: .35rem .65rem; padding: .85rem 1.15rem; margin-bottom: 1rem; }
+.skilling-page .hiscores label { flex: 1 1 12rem; max-width: 20rem; }
+.skilling-page .hiscores .ghost { min-height: 2.44rem; }
+.skilling-page .hiscores .plan-status { flex-basis: 100%; margin-top: .1rem; }
+.skilling-page .quote-source { color: var(--gold); margin-left: .15rem; }
+.skilling-page .method-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.skilling-page .metric { padding: .75rem .9rem; min-width: 0; }
+.skilling-page .metric span { display: block; font-size: .87rem; color: var(--muted); }
+.skilling-page .metric strong { display: block; margin: .1rem 0; overflow-wrap: anywhere; }
+.skilling-page .metric small { color: var(--accent, var(--gold)); font: .83rem var(--mono); }
+.skilling-page .table-head { padding: .85rem 1rem; display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
+.skilling-page .table-head h2 { font-size: 1.35rem; margin: 0; }
+.skilling-page .table-tools { display: flex; align-items: center; gap: .55rem; }
+.skilling-page .table-tools input { width: min(100%, 14rem); }
+.skilling-page .table-tools select { appearance: none; padding-right: 1.65rem; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 12px) 52%, calc(100% - 8px) 52%; background-size: 4px 4px; background-repeat: no-repeat; }
+.skilling-page .table-scroll { overflow-x: auto; }
+.skilling-page table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.skilling-page thead { background: #262626; color: var(--muted); }
+.skilling-page th, .skilling-page td { text-align: left; white-space: nowrap; padding: .66rem .9rem; border-bottom: 1px solid #373737; }
+.skilling-page td:not(:first-child) { font-variant-numeric: tabular-nums; }
+.skilling-page tbody tr:nth-child(even) { background: #191919; }
+.skilling-page tbody tr:hover { background: #252525; }
+.skilling-page tbody tr:last-child td, .skilling-page tbody tr:last-child th { border-bottom: 0; }
+.skilling-page .sortable { padding: 0; }
+.skilling-page .sortable button { display: block; width: 100%; text-align: left; padding: .66rem .9rem; color: inherit; background: transparent; border: 0; font-weight: 600; }
+.skilling-page .sortable button:hover, .skilling-page .sortable[aria-sort] { color: var(--gold); }
+.skilling-page .sort-mark { margin-left: .3rem; font-size: .8em; }
+.skilling-page .row-name { font-weight: 600; }
+.skilling-page .row-name small { display: block; color: var(--muted); font-size: .77rem; font-weight: 400; }
+.skilling-page .good { color: var(--green); }
+.skilling-page .warn { color: var(--danger); }
+.skilling-page .tag { font: .76rem var(--mono); background: #333727; color: #cfe4ae; border-radius: 5px; padding: .16rem .32rem; margin-left: .44rem; }
+.skilling-page .table-note { padding: .65rem 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; margin: 0; }
+.skilling-page .raw { margin-top: 1rem; }
+.skilling-page .raw summary { cursor: pointer; padding: .8rem 1rem; font-weight: 600; }
+.skilling-page .raw table { min-width: max-content; }
+.skilling-page .raw tbody th { color: var(--muted); font-weight: 400; }
+.skilling-page .method-source h3 { padding: .75rem 1rem .1rem; margin: 0; font: bold 1.15rem var(--heading); }
+.skilling-page .method-source .table-scroll + h3 { border-top: 1px solid var(--line); }
+.skilling-page .site-footer { display: flex; justify-content: space-between; gap: .7rem; border-top: 1px solid var(--line); margin: .5rem 0 0; padding: .85rem 0; font-size: .8rem; color: var(--muted); }
+.skilling-page dialog { width: min(34rem, calc(100vw - 2rem)); max-height: 82vh; padding: 1rem; color: var(--text); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.skilling-page dialog::backdrop { background: #10120dcc; }
+.skilling-page .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .7rem; }
+.skilling-page .dialog-head h2 { margin: 0; }
+.skilling-page .dialog-head button { border: 0; color: var(--muted); background: transparent; font-size: 1.45rem; }
+.skilling-page .search-results { margin-top: .65rem; }
+.skilling-page .search-results button { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; padding: .55rem .6rem; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; }
+.skilling-page .search-results button:hover { background: var(--panel-raised); }
+.skilling-page .search-results small { color: var(--muted); }
+.skilling-page .notice { padding: .75rem 1rem; color: var(--muted); margin: 0; }
+@media (max-width: 1080px) {
+  .skilling-page .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .skilling-page .hero-art { right: 5%; }
+}
+@media (max-width: 750px) {
+  .skilling-page .nav-link { min-height: 34px; padding: .2rem .42rem; white-space: nowrap; }
+  .skilling-page .skilling-topbar { height: 49px; }
+  .skilling-page .hero { min-height: 222px; }
+  .skilling-page .hero-copy { max-width: 76%; }
+  .skilling-page .hero-art { right: 4%; width: 26%; opacity: .58; }
+}
+@media (max-width: 510px) {
+  .skilling-page kbd { display: none; }
+  .skilling-page .skilling-topbar { gap: .35rem; }
+  .skilling-page .top-actions { gap: .3rem; }
+  .skilling-page .search-trigger { padding-inline: .45rem; }
+  .skilling-page .card-grid { gap: .55rem; }
+  .skilling-page .skill-card { padding: .7rem; }
+  .skilling-page .card-top { gap: .4rem; }
+  .skilling-page .card-top h3 { font-size: 1.02rem; }
+  .skilling-page .card-icon { width: 1.8rem; height: 1.8rem; }
+  .skilling-page .hero-copy { max-width: 88%; }
+  .skilling-page .hero-art { opacity: .35; }
+  .skilling-page .fields, .skilling-page .method-summary { grid-template-columns: 1fr; gap: .45rem; }
+  .skilling-page .planner, .skilling-page .table-head { padding: .75rem; }
+  .skilling-page .table-head { align-items: stretch; flex-direction: column; }
+  .skilling-page .table-tools input, .skilling-page .table-tools select { width: 100%; }
+  .skilling-page .site-footer { flex-wrap: wrap; }
+}

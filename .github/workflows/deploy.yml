@@ -34,7 +34,10 @@ jobs:
       - name: Build
         run: npm run build
       - name: Add GitHub Pages deep-link fallback
-        run: cp dist/index.html dist/404.html
+        run: |
+          cp dist/index.html dist/404.html
+          mkdir -p dist/skilling
+          cp dist/index.html dist/skilling/index.html
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
