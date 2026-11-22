@@ -1,17 +1,23 @@
 import sheets from './sheets.json';
 import market from './market.js';
 import { readAmount } from './amounts.js';
-import { catalog, evaluateMethod, maxXp } from './training.js';
+import { catalog, evaluateMethod, levelFromXp, maxXp, methodAccess } from './training.js';
 import { loadPreferences, savePreferences, skillPreferences } from './preferences.js';
 import { attachMethodEditor, editorMarkup } from './method-editor.js';
 import { attachFossils, fossilMarkup } from './fossils.js';
 import { attachPraygility, praygilityMarkup } from './praygility-controls.js';
+import { defaultTrade } from './trade.js';
+import { protectionModes, treeGroups } from './trees.js';
 
 export function mountSkilling(root, api) {
   const events = new AbortController();
   const { signal } = events;
   const on = (element, event, handler) => element.addEventListener(event, handler, { signal });
   const preferences = loadPreferences();
+  const trade = preferences.trade = {
+    buy: preferences.trade?.buy === 'slow' ? 'slow' : defaultTrade.buy,
+    sell: preferences.trade?.sell === 'slow' ? 'slow' : defaultTrade.sell,
+  };
 
   let marketQuotes = null;
   let quoteTime = null;
@@ -29,8 +35,8 @@ export function mountSkilling(root, api) {
   const t = (en, pt) => language === 'pt-BR' ? pt : en;
   const sections = {
     cons: { name: ['Construction', 'Construction'], icon: '⚒', color: '#e8b882', description: ['Compare furniture, Mahogany Homes, repair kits, and hull parts.', 'Compare móveis, Mahogany Homes, kits de reparo e peças de casco.'] },
-    craft: { name: ['Crafting', 'Crafting'], icon: '◇', color: '#efbf9b', description: ['Compare dragonhide bodies and battlestaves by sales channel.', 'Compare dragonhide bodies e battlestaves pelo canal de venda.'] },
-    farming: { name: ['Fruit Trees', 'Fruit Trees'], icon: '♣', color: '#abd586', description: ['Compare XP rates for papaya, palm, and magic tree runs.', 'Compare o rendimento de runs de papaya, palm e magic.'] },
+    craft: { name: ['Crafting', 'Crafting'], icon: '◇', color: '#efbf9b', description: ['Compare dragonhide bodies, battlestaves, and gem cutting.', 'Compare armaduras de couro de dragão, cajados de batalha e corte de gemas.'] },
+    farming: { name: ['Trees', 'Árvores'], icon: '♣', color: '#abd586', description: ['Compare regular, fruit, hardwood, and special trees with your choice of protection.', 'Compare árvores comuns, frutíferas, de madeira dura e especiais com a proteção que escolher.'] },
     herblore: { name: ['Herblore', 'Herblore'], icon: '⚗', color: '#9dd4b5', description: ['Compare potion costs, returns, and XP rates.', 'Compare o custo, o retorno e o XP das poções da planilha.'] },
     prayer: { name: ['Prayer', 'Prayer'], icon: '✦', color: '#f0d793', description: ['Compare regular Prayer training and assess the fossils you own.', 'Compare o treino de Oração e avalie os fósseis que você tem.'] },
     rc: { name: ['Runecraft', 'Runecraft'], icon: '◈', color: '#d0b6ed', description: ['Compare solo routes, runners, and Guardians of the Rift.', 'Compare runs solo, runners e Guardians of the Rift.'] },
@@ -40,7 +46,6 @@ export function mountSkilling(root, api) {
   const training = ['cons', 'craft', 'farming', 'herblore', 'prayer', 'rc'];
   const prefsFor = Object.fromEntries(training.map((id) => [id, skillPreferences(preferences, id)]));
   const reference = ['flipping', 'xp'];
-  const craftGroups = ['W308 Anvil', 'Grand Exchange'];
   const constructionGroups = {
     sheet: ['Spreadsheet methods', 'Métodos da planilha'],
     kits: ['Repair kits', 'Kits de reparo'],
@@ -78,6 +83,7 @@ export function mountSkilling(root, api) {
   const searchResults = root.querySelector('#search-results');
   let integer;
   let decimal;
+  let oneDecimal;
   let precise;
   let editableNumber;
 
@@ -87,6 +93,7 @@ export function mountSkilling(root, api) {
   const normalize = (value) => String(value).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
   const valueText = (value, format, unit = '') => value === null ? '—' : `${format.format(value || 0)}${unit}`;
   const money = (amount) => amount === null ? '—' : `${amount > 0 ? '+' : ''}${decimal.format(amount || 0)} M`;
+  const xpRate = (rate) => rate === null ? '—' : Number.isFinite(rate) ? `${oneDecimal.format(rate / 1000)}k` : integer.format(rate);
 
   const plannerAmount = (value, index) => readAmount(value, language, index === 2 ? 'income' : 'xp');
 
@@ -100,6 +107,17 @@ export function mountSkilling(root, api) {
       : priceStatus === 'error' ? t('Wiki prices unavailable. Try again.', 'Preços da Wiki indisponíveis. Tente novamente.')
         : time ? t(`Wiki prices fetched ${time}`, `Preços da Wiki consultados em ${time}`) : t('Using source prices', 'Usando preços das fontes originais');
     status.textContent = priceStatus === 'error' && time ? `${label} ${t(`Last update: ${time}`, `Última atualização: ${time}`)}` : label;
+    for (const group of root.querySelectorAll('[data-trade-group]')) {
+      const buy = group.dataset.tradeGroup === 'buy';
+      group.setAttribute('aria-label', buy ? t('Buy speed', 'Velocidade de compra') : t('Sell speed', 'Velocidade de venda'));
+      group.querySelector('span').textContent = buy ? t('Buy', 'Comprar') : t('Sell', 'Vender');
+    }
+    for (const option of root.querySelectorAll('[data-trade]')) {
+      const { trade: side, speed } = option.dataset;
+      option.setAttribute('aria-pressed', String(trade[side] === speed));
+      option.textContent = speed === 'instant' ? t('Instant', 'Imediata') : t('Slow', 'Lenta');
+    }
+    root.querySelector('#trade-tax').textContent = t('2% GE seller tax where applicable', 'Imposto de venda de 2% no Mercado Geral quando aplicável');
   }
   const routeFor = (id, query = '') => `#${id}${query ? `?${new URLSearchParams({ busca: query })}` : ''}`;
 
@@ -209,7 +227,7 @@ export function mountSkilling(root, api) {
         return direction * (typeof x === 'number' ? x - y : x.localeCompare(y, language));
       });
       body.innerHTML = visible.length
-        ? visible.map(({ cells }) => `<tr>${cells.map((cell, index) => index ? `<td>${cell}</td>` : `<th scope="row">${cell}</th>`).join('')}</tr>`).join('')
+        ? visible.map(({ cells, access }) => `<tr${access && access !== 'unlocked' ? ' class="method-locked"' : ''}>${cells.map((cell, index) => index ? `<td>${cell}</td>` : `<th scope="row">${cell}</th>`).join('')}</tr>`).join('')
         : `<tr><td colspan="${labels.length}" class="notice">${t('No results match this filter.', 'Nenhum resultado para esse filtro.')}</td></tr>`;
       const total = `${visible.length} ${t('of', 'de')} ${rows.length} ${t('results', 'resultados')}`;
       note.textContent = message ? `${total} · ${message}` : total;
@@ -249,12 +267,12 @@ export function mountSkilling(root, api) {
         t('Profit (GP)', 'Lucro (GP)'), 'XP', 'XP/h', 'GP/XP');
       const name = t(...constructionGroups[group]);
       const rows = constructionMethods.filter((method) => method.group === group).map((method) => {
-        const amounts = market.boatValue(marketQuotes, method.group, method.tier, method.quantity) ?? method;
+        const amounts = market.boatValue(marketQuotes, method.group, method.tier, method.quantity, trade) ?? method;
         const net = amounts.value - amounts.materials;
         const cells = [method.level];
         if (group === 'kits') cells.push(method.quantity);
         cells.push(amounts.materials, amounts.value, net, method.xp, method.rate, net / method.xp);
-        return `<tr><th scope="row">${method.name}</th>${cells.map((value) => `<td>${decimal.format(value)}</td>`).join('')}</tr>`;
+        return `<tr><th scope="row">${method.name}</th>${cells.map((value, index) => `<td>${index === cells.length - 2 ? xpRate(value) : decimal.format(value)}</td>`).join('')}</tr>`;
       }).join('');
       return `<h3>${name}</h3><div class="table-scroll" role="region" tabindex="0" aria-label="${name}">
         <table><thead><tr>${labels.map((label) => `<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -286,7 +304,7 @@ export function mountSkilling(root, api) {
   function planView(id, query, view) {
     const { settings, raw } = sheets[id];
     const prefs = prefsFor[id];
-    const builtIn = catalog(id, constructionMethods);
+    const builtIn = catalog(id, constructionMethods, prefs.protection);
     const praygility = builtIn.find((method) => method.magic);
     const allMethods = () => [...builtIn, ...prefs.custom];
     const persist = () => savePreferences(preferences);
@@ -295,12 +313,19 @@ export function mountSkilling(root, api) {
       return Number.isFinite(rate) && rate > 0 ? rate : undefined;
     };
     const fields = [t('Current XP', 'XP atual'), t('XP goal', 'Meta de XP'), t('Alternative income (M GP/h)', 'Renda alternativa (M GP/h)')];
-    const groupOptions = id === 'craft'
-      ? Object.entries(craftGroups)
-      : id === 'cons' ? Object.entries(constructionGroups).map(([key, labels]) => [key, t(...labels)]) : [];
-    const segment = groupOptions.length ? `<select id="segment" aria-label="${id === 'craft' ? t('Sales channel', 'Canal de venda') : t('Method group', 'Grupo de métodos')}">
-      <option value="all">${id === 'craft' ? t('All channels', 'Todos os canais') : t('All groups', 'Todos os grupos')}</option>
+    const groupOptions = id === 'cons' || id === 'farming'
+      ? Object.entries(id === 'cons' ? constructionGroups : treeGroups).map(([key, labels]) => [key, t(...labels)]) : [];
+    const segment = groupOptions.length ? `<select id="segment" aria-label="${t('Method group', 'Grupo de métodos')}">
+      <option value="all">${t('All groups', 'Todos os grupos')}</option>
       ${groupOptions.map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select>` : '';
+    const protection = id === 'farming' ? `<section class="box planner">
+      <div class="planner-head"><h2>${t('Tree protection', 'Proteção das árvores')}</h2></div>
+      <div class="protection-options" id="tree-protection" role="group" aria-label="${t('Tree protection method', 'Método de proteção das árvores')}">
+        ${Object.entries(protectionModes).map(([key, mode]) => `<button type="button" class="ghost" data-protection="${key}" aria-pressed="${prefs.protection === key}">${t(...mode.name)}</button>`).join('')}
+      </div>
+      <p class="amount-hint">${t('XP rates count active run time and exclude harvesting. Where survival is unknown, rates assume no losses. Untradeable supplies are excluded from GP costs.',
+        'As taxas de XP contam o tempo ativo das rotas e excluem a colheita. Quando a sobrevivência é desconhecida, a estimativa desconsidera perdas. Materiais não negociáveis ficam fora dos custos.')}</p>
+    </section>` : '';
     const topControls = `<div class="top-control"><button class="ghost" id="top-methods" type="button" aria-pressed="${prefs.top}">${t('Show top', 'Ver melhores')}</button>
       <input id="top-count" type="number" min="1" max="999" step="1" value="${prefs.topCount}" aria-label="${t('Number of top methods', 'Número de melhores métodos')}"></div>`;
     main.innerHTML = `${heading(id)}${hiscoresForm(id)}<form class="planner box" id="planner" novalidate>
@@ -308,9 +333,13 @@ export function mountSkilling(root, api) {
       <div class="fields">${fields.map((label, index) => `<label>${label}<input type="text" data-amount required autocomplete="off" value="${editableNumber.format(settings[index])}"></label>`).join('')}</div>
       <p class="amount-hint">${t('Use k or m, for example 2.5m XP or 750k GP/h.', 'Use k ou m, por exemplo 2,5m de XP ou 750k GP/h.')}</p>
       <p class="plan-status" id="plan-status" aria-live="polite"></p>
-    </form>${praygility ? praygilityMarkup(t, prefs.agility, editableNumber.format) : ''}
+    </form>${praygility ? praygilityMarkup(t, prefs.agility, editableNumber.format) : ''}${protection}
     ${editorMarkup(t)}<div class="method-summary" id="metrics"></div>
     ${tableFrame(t('Method comparison', 'Comparação de métodos'), t('Filter methods', 'Filtrar métodos'), segment + topControls)}
+    ${id === 'craft' ? `<p class="amount-hint">${t('Gem cutting assumes 2,700 attempts per hour with a regular chisel. Semi-precious gems account for crushing at your Crafting level.',
+      'O corte usa 2.700 tentativas por hora com um cinzel comum. Gemas semipreciosas consideram a chance de quebrar no seu nível de Artesanato.')}</p>` : ''}
+    ${id === 'herblore' ? `<p class="amount-hint">${t('Super Combat uses one Torstol and one each of 4-dose Super attack, strength, and defence. It earns 150 XP and returns two empty vials per mix.',
+      'Super Combat usa um Torstol e uma poção de 4 doses de cada tipo: Super attack, strength e defence. Cada mistura concede 150 XP e devolve dois frascos vazios.')}</p>` : ''}
     ${id === 'prayer' ? fossilMarkup(t, prefs, integer) : ''}
     ${id === 'cons' ? constructionSource() : ''}${rawTable(raw)}`;
 
@@ -334,17 +363,17 @@ export function mountSkilling(root, api) {
     const labels = [t('Method', 'Método'), 'XP/h', t('Training (h)', 'Treino (h)'), t('GP time (h)', 'Tempo de GP (h)'),
       t('Adjusted time (h)', 'Tempo ajustado (h)'), t('Net GP', 'Saldo (GP)')];
     labels.push(t('Level req.', 'Nível exigido'), 'GP/XP');
-    if (id === 'craft') labels.push(t('Sales channel', 'Canal de venda'));
-    const groupLabel = (group) => id === 'craft' ? craftGroups[group] ?? t('Custom', 'Personalizado') : '';
+    if (id === 'farming') labels.push(t('Growth (h)', 'Crescimento (h)'), t('Protection (GP)', 'Proteção (GP)'), t('Survival', 'Sobrevivência'));
+    const groupLabel = (group) => id === 'farming' && treeGroups[group] ? t(...treeGroups[group]) : '';
     let visibleIds = new Set();
     const table = makeTable(labels, (row) => visibleIds.has(row.id), 4, { 1: -1, 5: -1, 7: -1 }, view.sort);
     const save = () => { persist(); update(); };
     const updatePraygility = praygility ? attachPraygility({ section: root.querySelector('#praygility-controls'),
-      agility: prefs.agility, language, t, format: editableNumber.format, integer, onChange: save }) : null;
+      agility: prefs.agility, language, t, format: editableNumber.format, formatRate: xpRate, onChange: save }) : null;
     attachMethodEditor({ form: root.querySelector('#edit-method'), methods: allMethods, prefs, t, language,
-      format: (value) => editableNumber.format(value), escape: escapeHtml, groupLabel, onSave: save, selected: view.editor });
+      format: (value) => editableNumber.format(value), escape: escapeHtml, groupLabel, onSave: save, selected: view.editor, skill: id });
     const updateFossils = id === 'prayer' ? attachFossils({ section: root.querySelector('#fossils'), prefs, t,
-      integer, decimal, escape: escapeHtml, onSave: persist, onChange: update }) : null;
+      integer, decimal: oneDecimal, escape: escapeHtml, onSave: persist, onChange: update }) : null;
 
     function update() {
       const [current, goal, gp] = inputs.map((input, index) => plannerAmount(input.value, index));
@@ -353,47 +382,57 @@ export function mountSkilling(root, api) {
       const valid = validFields.every(Boolean);
       inputs.forEach((input, index) => input.setAttribute('aria-invalid', String(!validFields[index])));
       const remaining = Math.max(0, goal - current);
-      const plan = { remaining, gp, valid, agility: prefs.agility };
+      const skillLevel = validFields[0] ? levelFromXp(current) : null;
+      const plan = { remaining, gp, valid, agility: prefs.agility, trade, protection: prefs.protection, skillLevel };
       const matches = allMethods().filter((method) => !prefs.overrides[method.id]?.hidden)
-        .map((method) => evaluateMethod(method, id, settings, marketQuotes, plan, rateOverride(method)));
+        .map((method) => ({ ...evaluateMethod(method, id, settings, marketQuotes, plan, rateOverride(method), prefs.overrides[method.id]?.salePrice),
+          access: methodAccess(method, skillLevel, prefs.agility?.magicLevel) }));
       const query = normalize(filter.value);
-      const ranked = matches.filter((method) => inChannel(method.group) && normalize(method.name).includes(query))
+      const ranked = matches.filter((method) => inChannel(method.group)
+        && (normalize(method.name).includes(query) || (method.recipeName && normalize(method.recipeName).includes(query))))
         .sort((a, b) => (a.combined ?? Infinity) - (b.combined ?? Infinity) || b.rate - a.rate);
-      const options = prefs.top ? ranked.slice(0, prefs.topCount) : ranked;
+      const unlocked = ranked.filter((method) => method.access === 'unlocked');
+      const options = prefs.top ? unlocked.slice(0, prefs.topCount) : ranked;
       visibleIds = new Set(options.map(({ id }) => id));
-      const quickest = options.find((method) => method.combined !== null);
-      const topRate = options.reduce((best, method) => !best || method.rate > best.rate ? method : best, null);
-      const bestBalance = options.filter((method) => method.balance !== null)
+      const considered = prefs.top ? options : unlocked;
+      const quickest = considered.find((method) => method.combined !== null);
+      const topRate = considered.reduce((best, method) => !best || method.rate > best.rate ? method : best, null);
+      const bestBalance = considered.filter((method) => method.balance !== null)
         .reduce((best, method) => !best || method.balance > best.balance ? method : best, null);
       status.classList.toggle('error', !valid);
       status.innerHTML = !valid ? t('Enter whole XP values from 0 to 200 million and a positive income rate.', 'Informe XP inteiro entre 0 e 200 milhões e uma renda positiva.')
         : remaining === 0 ? `<strong>${t('XP goal reached.', 'Meta de XP atingida.')}</strong>`
-          : `${t('XP remaining', 'XP restante')} <strong>${integer.format(remaining)}</strong>`;
+        : `${t('XP remaining', 'XP restante')} <strong>${integer.format(remaining)}</strong> · ${t('Current level', 'Nível atual')} <strong>${skillLevel}</strong>`;
 
       const metric = (label, option, value) => `<div class="metric box"><span>${label}</span><strong>${option ? escapeHtml(option.name) : '—'}</strong>${option ? `<small>${value}</small>` : ''}</div>`;
-      metrics.innerHTML = metric(t('Shortest adjusted time', 'Menor tempo ajustado'), valid && remaining ? quickest : null, valueText(quickest?.combined ?? null, decimal, ' h'))
-        + metric(t('Highest XP rate', 'Maior taxa de XP'), topRate, valueText(topRate?.rate ?? null, integer, ' XP/h'))
+      metrics.innerHTML = metric(t('Shortest adjusted time', 'Menor tempo ajustado'), valid && remaining ? quickest : null, valueText(quickest?.combined ?? null, oneDecimal, ' h'))
+        + metric(t('Highest XP rate', 'Maior taxa de XP'), topRate, `${xpRate(topRate?.rate ?? null)} XP/h`)
         + metric(t('Best net GP', 'Melhor saldo'), valid && remaining ? bestBalance : null, money(bestBalance?.balance ?? null));
       table(matches.map((method) => {
         const badge = valid && remaining && method === quickest ? ` <span class="tag">${t('Shortest time', 'Menor tempo')}</span>` : '';
         const values = [method.name, method.rate, method.practice, method.gpHours, method.combined, method.balance];
         const originalPrice = marketQuotes && !method.wikiPriced && !method.custom ? `<sup class="quote-source" title="${t('Source price', 'Preço original')}">*</sup>` : '';
-        const cells = [`<span class="row-name">${escapeHtml(method.name)}${badge}</span>`, integer.format(method.rate),
-          valueText(method.practice, decimal), valueText(method.gpHours, decimal), valueText(method.combined, decimal),
+        const cells = [`<span class="row-name">${escapeHtml(method.name)}${badge}</span>`, xpRate(method.rate),
+          valueText(method.practice, oneDecimal), valueText(method.gpHours, oneDecimal), valueText(method.combined, oneDecimal),
           `<span class="${method.balance > 0 ? 'good' : method.balance < 0 ? 'warn' : ''}">${money(method.balance)}</span>${originalPrice}`];
         values.push(method.level, method.netPerXp);
-        cells.push(`${integer.format(method.level)}${method.magic ? ` ${t('Magic', 'Magia')}` : ''}`, valueText(method.netPerXp, decimal));
-        if (id === 'craft') {
-          values.push(groupLabel(method.group));
-          cells.push(groupLabel(method.group));
+        const lock = method.access === 'locked' ? t('Locked', 'Bloqueado')
+          : method.access === 'unknown' ? t('Level unknown', 'Nível desconhecido') : '';
+        cells.push(`${integer.format(method.level)}${method.magic ? ` ${t('Magic', 'Magia')}` : ''}${lock ? ` <small>${lock}</small>` : ''}`, valueText(method.netPerXp, decimal));
+        if (id === 'farming') {
+          const growth = method.tree ? method.tree.growthMinutes / 60 : null;
+          const expected = method.treeEstimate;
+          values.push(growth, expected?.protectionCost ?? null, expected?.survival ?? null);
+          cells.push(valueText(growth, oneDecimal), valueText(expected?.protectionCost ?? null, integer),
+            valueText(expected?.survival == null ? null : 100 * expected.survival, oneDecimal, '%'));
         }
-        return { id: method.id, values, cells };
-      }), prefs.top ? t('Showing the shortest adjusted times among matching methods.', 'Exibindo os menores tempos ajustados entre os métodos filtrados.')
-        : marketQuotes ? t('Wiki quotes use instant buy and sell prices, including seller tax. * Source estimate.',
-        'Cotações da Wiki usam preços de compra e venda imediatas, com imposto de venda. * Estimativa original.')
+        return { id: method.id, values, cells, access: method.access };
+      }), prefs.top ? t('Showing the shortest adjusted times among unlocked methods.', 'Exibindo os menores tempos ajustados entre os métodos desbloqueados.')
+        : marketQuotes ? t('Wiki quotes use the selected buy and sell speeds. GE proceeds include 2% seller tax where applicable. * Source estimate.',
+        'As cotações da Wiki usam as velocidades de compra e venda escolhidas. A receita do Mercado Geral inclui imposto de 2% quando aplicável. * Estimativa original.')
         : t('Adjusted time includes the hours needed to earn GP and subtracts the equivalent hours for a profit.',
           'O tempo ajustado inclui as horas necessárias para obter GP e desconta as horas equivalentes ao lucro.'));
-      updateFossils?.({ current, remaining, gp, valid, quotes: marketQuotes, methods: matches });
+      updateFossils?.({ remaining, gp, valid, quotes: marketQuotes, methods: matches, trade });
       if (updatePraygility) updatePraygility(rateOverride(praygility) ?? praygility.rate);
     }
     form.addEventListener('submit', (event) => event.preventDefault());
@@ -424,6 +463,14 @@ export function mountSkilling(root, api) {
       save();
     });
     topCount.addEventListener('blur', () => { topCount.value = prefs.topCount; });
+    root.querySelector('#tree-protection')?.addEventListener('click', (event) => {
+      const key = event.target.closest('[data-protection]')?.dataset.protection;
+      if (!Object.hasOwn(protectionModes, key) || prefs.protection === key) return;
+      prefs.protection = key;
+      persist();
+      render(false, readView());
+      root.querySelector(`[data-protection="${key}"]`).focus();
+    });
     update();
   }
 
@@ -448,7 +495,7 @@ export function mountSkilling(root, api) {
     if (!isXP) labels.push(t('Level req.', 'Nível exigido'));
     const table = makeTable(labels, ({ values }) => normalize(values[0]).includes(normalize(filter.value)), isXP ? 0 : 5, { 5: -1 }, view.sort);
     const displayRows = rows.map((row) => {
-      const values = usePrices ? [row[0], ...(market.flip(marketQuotes, row[0]) ?? Array(5).fill(null))] : [...row];
+      const values = usePrices ? [row[0], ...(market.flip(marketQuotes, row[0], trade) ?? Array(5).fill(null))] : [...row];
       const cells = values.map((value, index) => typeof value === 'string'
         ? `<span class="row-name">${escapeHtml(value)}</span>` : valueText(value, isXP && index === 3 ? precise : decimal));
       if (!isXP) {
@@ -486,6 +533,7 @@ export function mountSkilling(root, api) {
     root.lang = language;
     integer = new Intl.NumberFormat(language, { maximumFractionDigits: 0 });
     decimal = new Intl.NumberFormat(language, { maximumFractionDigits: 2 });
+    oneDecimal = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     precise = new Intl.NumberFormat(language, { maximumFractionDigits: 3 });
     editableNumber = new Intl.NumberFormat(language, { maximumFractionDigits: 20 });
     const text = (selector, en, pt) => { root.querySelector(selector).textContent = t(en, pt); };
@@ -584,6 +632,9 @@ export function mountSkilling(root, api) {
       if (response.status === 404) playerStatus = 'missing';
       else if (response.ok) {
         playerProfile = await response.json();
+        const magic = playerProfile.xp?.magic;
+        prefsFor.prayer.agility.magicLevel = Number.isFinite(magic) ? levelFromXp(magic) : null;
+        savePreferences(preferences);
         playerStatus = 'found';
       } else playerStatus = 'error';
     } catch {
@@ -592,7 +643,7 @@ export function mountSkilling(root, api) {
     if (!signal.aborted) render(false, { ...readView(), applyPlayer: playerStatus === 'found' });
   }
 
-  on(root.querySelector('#refresh-prices'), 'click', async () => {
+  async function updatePrices() {
     if (priceStatus === 'loading') return;
     priceStatus = 'loading';
     renderPrices();
@@ -611,6 +662,17 @@ export function mountSkilling(root, api) {
       priceStatus = 'error';
       renderPrices();
     }
+  }
+  on(root.querySelector('#refresh-prices'), 'click', updatePrices);
+  on(root.querySelector('#trade-options'), 'click', (event) => {
+    const option = event.target.closest('[data-trade]');
+    if (!option) return;
+    const { trade: side, speed } = option.dataset;
+    if (trade[side] === speed) return;
+    trade[side] = speed;
+    savePreferences(preferences);
+    render(false, readView());
+    if (!marketQuotes) updatePrices();
   });
   on(root.querySelector('#open-search'), 'click', openSearch);
   on(root.querySelector('#language-toggle'), 'click', (event) => {
@@ -660,5 +722,6 @@ export function mountSkilling(root, api) {
   });
   on(window, 'hashchange', () => render(true));
   render();
+  if (trade.buy !== defaultTrade.buy || trade.sell !== defaultTrade.sell) updatePrices();
   return () => events.abort();
 }

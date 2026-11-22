@@ -10,11 +10,13 @@ const presets = [
 export function praygilityMarkup(t, agility, format) {
   return `<section class="planner box praygility-controls" id="praygility-controls" aria-labelledby="praygility-title">
     <div class="planner-head"><h2 id="praygility-title">Praygility</h2></div>
-    <div class="fields two">
+    <div class="fields">
       <label>${t('Agility XP/h during Praygility', 'XP/h de Agilidade durante Praygility')}
         <input type="text" data-agility="combined" data-amount autocomplete="off" value="${format(agility.combined)}"></label>
       <label>${t('Alternative Agility XP/h', 'XP/h da alternativa de Agilidade')}
         <input type="text" data-agility="alternative" data-amount autocomplete="off" value="${format(agility.alternative)}"></label>
+      <label>${t('Magic level', 'Nível de Magia')}
+        <input type="number" data-magic-level min="1" max="99" value="${agility.magicLevel ?? ''}" placeholder="${t('Enter or use Hiscores', 'Informe ou use o Hiscores')}"></label>
     </div>
     <div class="agility-presets" role="group" aria-label="${t('Alternative Agility presets', 'Predefinições de Agilidade alternativa')}">
       ${presets.map(({ name, rate }) => `<button class="ghost" type="button" data-agility-preset="${rate}" aria-pressed="${agility.alternative === rate}">${rate / 1000}k ${name}</button>`).join('')}
@@ -23,11 +25,20 @@ export function praygilityMarkup(t, agility, format) {
   </section>`;
 }
 
-export function attachPraygility({ section, agility, language, t, format, integer, onChange }) {
+export function attachPraygility({ section, agility, language, t, format, formatRate, onChange }) {
   const inputs = Array.from(section.querySelectorAll('[data-agility]'));
   const presets = Array.from(section.querySelectorAll('[data-agility-preset]'));
   const alternative = section.querySelector('[data-agility="alternative"]');
   const status = section.querySelector('[data-agility-status]');
+  const magic = section.querySelector('[data-magic-level]');
+
+  magic.addEventListener('input', () => {
+    const level = magic.valueAsNumber;
+    const valid = Number.isInteger(level) && level >= 1 && level <= 99;
+    magic.setAttribute('aria-invalid', String(Boolean(magic.value) && !valid));
+    agility.magicLevel = valid ? level : null;
+    onChange();
+  });
 
   function updateInput(input) {
     const key = input.dataset.agility;
@@ -64,10 +75,10 @@ export function attachPraygility({ section, agility, language, t, format, intege
     }
 
     const rate = effectivePrayerRate(baselineRate, agility);
-    const raw = integer.format(prayerRateBeforeCredit(baselineRate));
+    const raw = formatRate(prayerRateBeforeCredit(baselineRate));
     status.textContent = Number.isFinite(rate)
-      ? t(`${integer.format(rate)} effective Prayer XP/h · ${raw} Prayer XP/h before Agility credit.`,
-        `${integer.format(rate)} XP/h efetivo de Oração · ${raw} XP/h de Oração antes do crédito de Agilidade.`)
+      ? t(`${formatRate(rate)} effective Prayer XP/h · ${raw} Prayer XP/h before Agility credit.`,
+        `${formatRate(rate)} XP/h efetivo de Oração · ${raw} XP/h de Oração antes do crédito de Agilidade.`)
       : t('Praygility adds no net training time at these Agility rates. GP cost still applies.',
         'Praygility não adiciona tempo líquido de treino com essas taxas de Agilidade. O custo em GP continua valendo.');
   };

@@ -14,7 +14,7 @@ export function editorMarkup(t) {
   </details>`;
 }
 
-export function attachMethodEditor({ form, methods, prefs, t, language, format, escape, groupLabel, onSave, selected }) {
+export function attachMethodEditor({ form, methods, prefs, t, language, format, escape, groupLabel, onSave, selected, skill }) {
   const picker = form.elements.selected;
   const fields = form.querySelector('[data-fields]');
   const feedback = form.querySelector('[data-feedback]');
@@ -44,18 +44,20 @@ export function attachMethodEditor({ form, methods, prefs, t, language, format, 
     }
     const override = method && prefs.overrides[method.id];
     const custom = isNew || method?.custom;
+    const saleOverride = skill === 'craft' && method && !custom;
     const rateLabel = method?.magic ? t('Effective Prayer XP/h at 62k vs. 65k Agility', 'XP/h efetivo de Oração com 62k vs. 65k de Agilidade')
       : t('XP per hour', 'XP por hora');
     fields.innerHTML = `<div class="editor-fields">
       ${custom ? `<label>${t('Method name', 'Nome do método')}<input name="name" maxlength="64" value="${escape(method?.name ?? '')}"></label>` : ''}
       <label>${rateLabel}<input name="rate" value="${method ? format(override?.rate ?? method.rate) : ''}" placeholder="250k"></label>
+      ${saleOverride ? `<label>${t('Custom sale GP per item (no GE tax)', 'Venda personalizada em GP por item (sem imposto)')}<input name="sale" inputmode="decimal" placeholder="${t('Use GE price', 'Usar preço do Mercado Geral')}" value="${override?.salePrice != null ? format(override.salePrice) : ''}"></label>` : ''}
       ${custom ? `<label>${t('GP/XP (negative = cost)', 'GP/XP (negativo = custo)')}<input name="net" inputmode="decimal" value="${method ? format(method.balancePerXp) : ''}"></label>
         <label>${t('Level requirement', 'Nível exigido')}<input name="level" type="number" min="1" max="99" value="${method?.level ?? 1}"></label>` : ''}
     </div>
     <div class="editor-actions">
       <label class="inline-check"><input name="hidden" type="checkbox" ${override?.hidden ? 'checked' : ''}>${t('Hide from comparisons', 'Ocultar das comparações')}</label>
       <button type="submit" class="ghost">${t('Save method', 'Salvar método')}</button>
-      ${isNew ? '' : `<button type="button" class="ghost" data-reset>${custom ? t('Remove custom method', 'Remover método personalizado') : t('Restore default rate and visibility', 'Restaurar taxa e visibilidade')}</button>`}
+      ${isNew ? '' : `<button type="button" class="ghost" data-reset>${custom ? t('Remove custom method', 'Remover método personalizado') : t('Restore method defaults', 'Restaurar padrão do método')}</button>`}
     </div>`;
   }
 
@@ -79,6 +81,12 @@ export function attachMethodEditor({ form, methods, prefs, t, language, format, 
 
     const id = method?.id ?? `custom:${crypto.randomUUID()}`;
     const hidden = form.elements.hidden.checked;
+    const saleText = form.elements.sale?.value.trim();
+    const salePrice = saleText ? readAmount(saleText, language, 'rate') : undefined;
+    if (saleText && (!Number.isFinite(salePrice) || salePrice < 0 || salePrice > 1000000000)) {
+      setMessage(t('Enter a sale price from 0 to 1 billion GP per item.', 'Informe um preço de venda de 0 a 1 bilhão de GP por item.'), true);
+      return;
+    }
     if (!method || method.custom) {
       const name = form.elements.name.value.trim();
       const balancePerXp = readAmount(form.elements.net.value, language, 'signed');
@@ -92,7 +100,7 @@ export function attachMethodEditor({ form, methods, prefs, t, language, format, 
       prefs.custom = method ? prefs.custom.map((item) => item.id === id ? next : item) : [...prefs.custom, next];
       prefs.overrides[id] = { hidden };
     } else {
-      prefs.overrides[id] = { rate, hidden };
+      prefs.overrides[id] = { hidden, ...(rate === method.rate ? {} : { rate }), ...(salePrice === undefined ? {} : { salePrice }) };
     }
     onSave();
     populate(id);

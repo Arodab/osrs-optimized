@@ -1,3 +1,6 @@
+import { afterTax, buyPrice, materialCost, sellPrice } from './trade.js';
+import currentQuotes from './market-snapshot.json';
+
 // Standard potion estimates use 3.15 doses per mix and the sheet's 9.92 GP amulet charge.
 const potion = (xp, base, secondary, output, amulet = true) => ({
   xp, inputs: [[base, 1], [secondary, 1]], output: [output, amulet ? .7875 : .75], fee: amulet ? 9.92 : 0,
@@ -15,6 +18,8 @@ export const additionalPotions = {
   Antifire: { level: 69, ...potion(157.5, 2483, 241, 2452) },
   Stamina: { level: 77, xp: 102, mixesPerHour: 2750, inputs: [[3016, 1], [12640, 4]], output: [12625, 1] },
   'Super antifire': { level: 92, xp: 130, inputs: [[2452, 1], [21975, 1]], output: [21978, 1] },
+  'Super combat': { level: 90, xp: 150, mixesPerHour: 2100, inputs: [[2436, 1], [2440, 1], [2442, 1], [269, 1]],
+    output: [12695, 1], byproducts: [[229, 2]] },
 };
 
 // Wiki GE snapshot from 2026-11-21. The refresh button replaces these estimates.
@@ -30,6 +35,7 @@ export const additionalPotionQuotes = {
   2483: { high: 1400 }, 241: { high: 70 }, 2452: { high: 645, low: 641 },
   12640: { high: 403 }, 12625: { low: 2315 },
   21975: { high: 20590 }, 21978: { low: 18357 },
+  ...currentQuotes,
 };
 
 export default (() => {
@@ -50,17 +56,12 @@ export default (() => {
     'mahog homes': { xp: 385, inputs: [[8782, 1], [2353, .5 / 12.7]] },
   };
   const crafting = {
-    green: { xp: 186, inputs: [[1745, 3]], output: [1135, 1], w308: 4200 },
-    blue: { xp: 210, inputs: [[2505, 3]], output: [2499, 1], w308: 5200 },
-    red: { xp: 234, inputs: [[2507, 3]], output: [2501, 1], w308: 6300 },
-    black: { xp: 258, inputs: [[2509, 3]], output: [2503, 1], w308: 7600 },
+    green: { xp: 186, inputs: [[1745, 3]], output: [1135, 1] },
+    blue: { xp: 210, inputs: [[2505, 3]], output: [2499, 1] },
+    red: { xp: 234, inputs: [[2507, 3]], output: [2501, 1] },
+    black: { xp: 258, inputs: [[2509, 3]], output: [2503, 1] },
     'air bstaff': { xp: 137.5, inputs: [[573, 1], [1391, 1]], output: [1397, 1] },
     'fire bstaff': { xp: 125, inputs: [[569, 1], [1391, 1]], output: [1393, 1] },
-  };
-  const farming = {
-    Papaya: { xp: 6218.4, inputs: [[5501, 1], [2114, 10]] },
-    Palm: { xp: 10260.6, inputs: [[5502, 1]] },
-    Magic: { xp: 13913.8, inputs: [[5374, 1]] },
   };
   const prayer = {
     Dragon: { xp: 504, inputs: [[536, 1]] },
@@ -78,7 +79,6 @@ export default (() => {
     'Ext. Super antifire': { xp: 160, inputs: [[21978, 1], [11994, 4]], output: [22209, 1] },
     Remedy: potion(200, 109, 27272, 27202),
     Magic: potion(172.5, 2483, 3138, 3040),
-    'Super combat': { xp: 150, inputs: [[2436, 1], [2440, 1], [2442, 1], [269, 1]], output: [12695, 1] },
     Prayer: potion(87.5, 99, 231, 2434),
     'Prayer regen': potion(132, 30100, 29993, 30125),
     Goading: potion(132, 97, 29993, 30137),
@@ -91,70 +91,59 @@ export default (() => {
     Nats: [561, 8500, 170, 4577800],
   };
   const flipping = { 'Super restore': [3026, 3024], 'Sara brew': [6687, 6685], Prayer: [139, 2434] };
-  const recipes = { cons: construction, craft: crafting, farming, prayer, herblore };
+  const recipes = { cons: construction, craft: crafting, prayer, herblore };
 
-  function price(quotes, id, side) {
-    const amount = quotes?.[id]?.[side];
-    return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
-  }
-
-  function afterTax(amount) {
-    return amount - Math.min(Math.floor(amount / 50), 5000000);
-  }
-
-  function recipeValue(quotes, { inputs, output, fee = 0 }, fixedValue) {
-    let materials = fee;
-    for (const [id, quantity] of inputs) {
-      const amount = price(quotes, id, 'high');
-      if (amount === null) return null;
-      materials += quantity * amount;
-    }
+  function recipeValue(quotes, { inputs, output, byproducts = [], fee = 0 }, trade, fixedValue) {
+    const cost = materialCost(quotes, inputs, trade);
+    if (cost === null) return null;
+    const materials = cost + fee;
     if (fixedValue !== undefined) return { materials, value: fixedValue };
-    if (!output) return { materials, value: 0 };
-    const [id, quantity] = output;
-    const sale = price(quotes, id, 'low');
-    return sale === null ? null : { materials, value: quantity * afterTax(sale) };
+    let value = 0;
+    for (const [id, quantity] of output ? [output, ...byproducts] : byproducts) {
+      const sale = sellPrice(quotes, id, trade);
+      if (sale === null) return null;
+      value += quantity * afterTax(sale, id);
+    }
+    return { materials, value };
   }
 
-  function balancePerXp(quotes, sheet, name, group, rate) {
+  function balancePerXp(quotes, sheet, name, group, rate, trade, customSale) {
     if (!quotes) return null;
     if (sheet === 'rc') {
       if (!Object.hasOwn(runecraft, name)) return null;
       const [id, quantity, basePrice, baseProfit] = runecraft[name];
-      const sale = price(quotes, id, 'low');
-      return sale === null ? null : (baseProfit + quantity * (afterTax(sale) - basePrice)) / rate;
+      const sale = sellPrice(quotes, id, trade);
+      return sale === null ? null : (baseProfit + quantity * (afterTax(sale, id) - basePrice)) / rate;
     }
     const items = recipes[sheet];
     if (!items || !Object.hasOwn(items, name)) return null;
     const recipe = items[name];
-    const totals = recipeValue(quotes, recipe, sheet === 'craft' && group === 0 ? recipe.w308 : undefined);
+    const totals = recipeValue(quotes, recipe, trade, sheet === 'craft' && group === 1 ? customSale : undefined);
     return totals === null ? null : (totals.value - totals.materials) / recipe.xp;
   }
 
-  function boatValue(quotes, group, tier, quantity) {
+  function boatValue(quotes, group, tier, quantity, trade) {
     if (!quotes) return null;
     const [plank, nails, planksUsed, nailsUsed, kit, hull] = wood[tier];
     const recipe = group === 'kits'
       ? { inputs: [[plank, planksUsed], [nails, nailsUsed], [1941, 5]], output: [kit, quantity] }
       : { inputs: [[plank, 5]], output: [hull, 1] };
-    return recipeValue(quotes, recipe);
+    return recipeValue(quotes, recipe, trade);
   }
 
-  function flip(quotes, name) {
+  function flip(quotes, name, trade) {
     if (!quotes || !Object.hasOwn(flipping, name)) return null;
     const [three, four] = flipping[name];
-    const high3 = price(quotes, three, 'high');
-    const low3 = price(quotes, three, 'low');
-    const high4 = price(quotes, four, 'high');
-    const low4 = price(quotes, four, 'low');
-    if ([high3, low3, high4, low4].includes(null)) return null;
-    return [high3, low3, high4, low4, 3 * afterTax(low4) - 4 * high3];
+    const buy3 = buyPrice(quotes, three, trade);
+    const sell3 = sellPrice(quotes, three, trade);
+    const buy4 = buyPrice(quotes, four, trade);
+    const sell4 = sellPrice(quotes, four, trade);
+    if ([buy3, sell3, buy4, sell4].includes(null)) return null;
+    return [buy3, sell3, buy4, sell4, 3 * afterTax(sell4, four) - 4 * buy3];
   }
 
-  function fossilSupplyPair(quotes) {
-    const calcite = price(quotes, 21543, 'high');
-    const pyrophosphite = price(quotes, 21545, 'high');
-    return calcite === null || pyrophosphite === null ? 188 : calcite + pyrophosphite;
+  function fossilSupplyPair(quotes, trade) {
+    return materialCost(quotes, [[21543, 1], [21545, 1]], trade) ?? 188;
   }
 
   return { balancePerXp, boatValue, flip, fossilSupplyPair };

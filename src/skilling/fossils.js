@@ -1,5 +1,4 @@
 import market from './market.js';
-import { levelFromXp } from './training.js';
 
 const tiers = [
   { name: ['Small', 'Pequeno'], xp: 500 },
@@ -58,14 +57,13 @@ export function attachFossils({ section, prefs, t, integer, decimal, escape, onS
     onChange();
   });
 
-  return ({ current, remaining, gp, valid, quotes, methods }) => {
-    const prayerLevel = levelFromXp(current);
-    const eligible = methods.filter(({ combined, level, magic }) => combined !== null && (magic || level <= prayerLevel))
+  return ({ remaining, gp, valid, quotes, methods, trade }) => {
+    const eligible = methods.filter(({ combined, access }) => combined !== null && access === 'unlocked')
       .sort((a, b) => a.combined - b.combined);
     benchmark.innerHTML = `<option value="">${t('Fastest eligible Prayer method', 'Método de Oração disponível mais rápido')}</option>`
       + eligible.map((method) => `<option value="${escape(method.id)}">${escape(method.name)}${method.magic ? ` (${method.level} ${t('Magic', 'Magia')})` : ''}</option>`).join('');
     if (eligible.some((method) => method.id === prefs.benchmark)) benchmark.value = prefs.benchmark;
-    const alternative = eligible.find((method) => method.id === benchmark.value) ?? eligible.find((method) => !method.magic);
+    const alternative = eligible.find((method) => method.id === benchmark.value) ?? eligible[0];
 
     let remainingXp = valid ? remaining : 0;
     let used = 0;
@@ -92,7 +90,7 @@ export function attachFossils({ section, prefs, t, integer, decimal, escape, onS
     const creditedXp = Math.min(usedXp, remaining);
     const trips = Math.ceil(used / perTrip);
     const supplyPairs = Math.max(trips * 3, Math.ceil(used * .46));
-    const cost = supplyPairs * market.fossilSupplyPair(quotes);
+    const cost = supplyPairs * market.fossilSupplyPair(quotes, trade);
     const minutes = trips * minutesPerTrip;
     const summary = t(
       `${integer.format(creditedXp)} XP toward your goal · ${integer.format(used)} fossils · ${decimal.format(minutes)} min · ${integer.format(cost)} GP in supplies`,

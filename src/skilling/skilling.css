@@ -87,6 +87,13 @@
 .skilling-page .amount-hint { color: var(--muted); font-size: .85rem; margin: .55rem 0 0; }
 .skilling-page .agility-presets { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .75rem; }
 .skilling-page .agility-presets button[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+.skilling-page .trade-options, .skilling-page .trade-group, .skilling-page .protection-options { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+.skilling-page .trade-options { flex-basis: 100%; gap: .45rem 1rem; padding-bottom: .2rem; color: var(--muted); }
+.skilling-page .trade-group > span { font-size: .85rem; }
+.skilling-page .trade-group button[aria-pressed="true"], .skilling-page .protection-options button[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+.skilling-page .method-locked { opacity: .58; }
+.skilling-page .method-locked th, .skilling-page .method-locked td, .skilling-page .method-locked td span { color: var(--muted); }
+.skilling-page .method-locked td small { display: block; font-size: .77rem; }
 .skilling-page .plan-status strong { color: var(--gold); }
 .skilling-page .plan-status.error { color: var(--danger); }
 .skilling-page .hiscores { display: flex; flex-wrap: wrap; align-items: end; gap: .35rem .65rem; padding: .85rem 1.15rem; margin-bottom: 1rem; }

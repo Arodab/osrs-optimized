@@ -33,6 +33,17 @@ export default function SkillingPage() {
         <button className="price-button" id="refresh-prices" type="button">Update Wiki prices</button>
         <span className="market-status" id="market-status" role="status">Using source prices</span>
         <a className="market-link" href="https://oldschool.runescape.wiki/w/RuneScape:Real-time_Prices" target="_blank" rel="noreferrer">OSRS Wiki</a>
+        <div className="trade-options" id="trade-options">
+          <div className="trade-group" data-trade-group="buy" role="group" aria-label="Buy speed">
+            <span>Buy</span><button type="button" className="ghost" data-trade="buy" data-speed="instant" aria-pressed="true">Instant</button>
+            <button type="button" className="ghost" data-trade="buy" data-speed="slow" aria-pressed="false">Slow</button>
+          </div>
+          <div className="trade-group" data-trade-group="sell" role="group" aria-label="Sell speed">
+            <span>Sell</span><button type="button" className="ghost" data-trade="sell" data-speed="instant" aria-pressed="true">Instant</button>
+            <button type="button" className="ghost" data-trade="sell" data-speed="slow" aria-pressed="false">Slow</button>
+          </div>
+          <small id="trade-tax">2% GE seller tax where applicable</small>
+        </div>
       </div>
       <div id="skilling-content" tabIndex={-1} />
       <footer className="site-footer"><span>Skilling Methods</span><span id="footer-source">Values from the source exports</span></footer>
