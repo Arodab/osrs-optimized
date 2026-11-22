@@ -44,9 +44,11 @@ export function attachMethodEditor({ form, methods, prefs, t, language, format, 
     }
     const override = method && prefs.overrides[method.id];
     const custom = isNew || method?.custom;
+    const rateLabel = method?.magic ? t('Effective Prayer XP/h at 62k vs. 65k Agility', 'XP/h efetivo de Oração com 62k vs. 65k de Agilidade')
+      : t('XP per hour', 'XP por hora');
     fields.innerHTML = `<div class="editor-fields">
       ${custom ? `<label>${t('Method name', 'Nome do método')}<input name="name" maxlength="64" value="${escape(method?.name ?? '')}"></label>` : ''}
-      <label>${t('XP per hour', 'XP por hora')}<input name="rate" value="${method ? format(override?.rate ?? method.rate) : ''}" placeholder="250k"></label>
+      <label>${rateLabel}<input name="rate" value="${method ? format(override?.rate ?? method.rate) : ''}" placeholder="250k"></label>
       ${custom ? `<label>${t('GP/XP (negative = cost)', 'GP/XP (negativo = custo)')}<input name="net" inputmode="decimal" value="${method ? format(method.balancePerXp) : ''}"></label>
         <label>${t('Level requirement', 'Nível exigido')}<input name="level" type="number" min="1" max="99" value="${method?.level ?? 1}"></label>` : ''}
     </div>

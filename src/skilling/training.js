@@ -1,5 +1,6 @@
 import sheets from './sheets.json';
 import market, { additionalPotions, additionalPotionQuotes } from './market.js';
+import { effectivePrayerRate } from './praygility.js';
 
 const requirements = {
   cons: { 'oak door': 74, 'mahog tables': 52, benches: 77, 'mahog homes': 70 },
@@ -37,11 +38,11 @@ export function catalog(skill, boats) {
 }
 
 export function evaluateMethod(method, skill, settings, quotes, plan, override) {
-  const rate = override ?? method.rate;
-  const { remaining, gp, valid } = plan;
+  const baselineRate = override ?? method.rate;
+  const { remaining, gp, valid, agility } = plan;
+  const rate = skill === 'prayer' && method.magic && agility ? effectivePrayerRate(baselineRate, agility) : baselineRate;
   const ratio = remaining / (settings[1] - settings[0]);
-  const isOverridden = override !== undefined && override !== method.rate;
-  const practice = valid ? method.snapshot && !isOverridden ? method.snapshot.training * ratio : remaining / rate : null;
+  const practice = valid ? method.snapshot && rate === method.rate ? method.snapshot.training * ratio : remaining / rate : null;
   const boatQuote = method.boat ? market.boatValue(quotes, method.group, method.tier, method.quantity) : null;
   const quote = method.boat
     ? boatQuote && (boatQuote.value - boatQuote.materials) / method.xp

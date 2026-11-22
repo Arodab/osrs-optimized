@@ -85,6 +85,8 @@
 .skilling-page input[aria-invalid="true"] { border-color: var(--danger); }
 .skilling-page .plan-status { font-size: .88rem; color: var(--muted); margin: .65rem 0 0; }
 .skilling-page .amount-hint { color: var(--muted); font-size: .85rem; margin: .55rem 0 0; }
+.skilling-page .agility-presets { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .75rem; }
+.skilling-page .agility-presets button[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
 .skilling-page .plan-status strong { color: var(--gold); }
 .skilling-page .plan-status.error { color: var(--danger); }
 .skilling-page .hiscores { display: flex; flex-wrap: wrap; align-items: end; gap: .35rem .65rem; padding: .85rem 1.15rem; margin-bottom: 1rem; }

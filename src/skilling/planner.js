@@ -5,6 +5,7 @@ import { catalog, evaluateMethod, maxXp } from './training.js';
 import { loadPreferences, savePreferences, skillPreferences } from './preferences.js';
 import { attachMethodEditor, editorMarkup } from './method-editor.js';
 import { attachFossils, fossilMarkup } from './fossils.js';
+import { attachPraygility, praygilityMarkup } from './praygility-controls.js';
 
 export function mountSkilling(root, api) {
   const events = new AbortController();
@@ -286,8 +287,13 @@ export function mountSkilling(root, api) {
     const { settings, raw } = sheets[id];
     const prefs = prefsFor[id];
     const builtIn = catalog(id, constructionMethods);
+    const praygility = builtIn.find((method) => method.magic);
     const allMethods = () => [...builtIn, ...prefs.custom];
     const persist = () => savePreferences(preferences);
+    const rateOverride = (method) => {
+      const rate = prefs.overrides[method.id]?.rate;
+      return Number.isFinite(rate) && rate > 0 ? rate : undefined;
+    };
     const fields = [t('Current XP', 'XP atual'), t('XP goal', 'Meta de XP'), t('Alternative income (M GP/h)', 'Renda alternativa (M GP/h)')];
     const groupOptions = id === 'craft'
       ? Object.entries(craftGroups)
@@ -302,7 +308,8 @@ export function mountSkilling(root, api) {
       <div class="fields">${fields.map((label, index) => `<label>${label}<input type="text" data-amount required autocomplete="off" value="${editableNumber.format(settings[index])}"></label>`).join('')}</div>
       <p class="amount-hint">${t('Use k or m, for example 2.5m XP or 750k GP/h.', 'Use k ou m, por exemplo 2,5m de XP ou 750k GP/h.')}</p>
       <p class="plan-status" id="plan-status" aria-live="polite"></p>
-    </form>${editorMarkup(t)}<div class="method-summary" id="metrics"></div>
+    </form>${praygility ? praygilityMarkup(t, prefs.agility, editableNumber.format) : ''}
+    ${editorMarkup(t)}<div class="method-summary" id="metrics"></div>
     ${tableFrame(t('Method comparison', 'Comparação de métodos'), t('Filter methods', 'Filtrar métodos'), segment + topControls)}
     ${id === 'prayer' ? fossilMarkup(t, prefs, integer) : ''}
     ${id === 'cons' ? constructionSource() : ''}${rawTable(raw)}`;
@@ -332,6 +339,8 @@ export function mountSkilling(root, api) {
     let visibleIds = new Set();
     const table = makeTable(labels, (row) => visibleIds.has(row.id), 4, { 1: -1, 5: -1, 7: -1 }, view.sort);
     const save = () => { persist(); update(); };
+    const updatePraygility = praygility ? attachPraygility({ section: root.querySelector('#praygility-controls'),
+      agility: prefs.agility, language, t, format: editableNumber.format, integer, onChange: save }) : null;
     attachMethodEditor({ form: root.querySelector('#edit-method'), methods: allMethods, prefs, t, language,
       format: (value) => editableNumber.format(value), escape: escapeHtml, groupLabel, onSave: save, selected: view.editor });
     const updateFossils = id === 'prayer' ? attachFossils({ section: root.querySelector('#fossils'), prefs, t,
@@ -344,11 +353,9 @@ export function mountSkilling(root, api) {
       const valid = validFields.every(Boolean);
       inputs.forEach((input, index) => input.setAttribute('aria-invalid', String(!validFields[index])));
       const remaining = Math.max(0, goal - current);
-      const matches = allMethods().filter((method) => !prefs.overrides[method.id]?.hidden).map((method) => {
-        const rate = prefs.overrides[method.id]?.rate;
-        const override = Number.isFinite(rate) && rate > 0 ? rate : undefined;
-        return evaluateMethod(method, id, settings, marketQuotes, { remaining, gp, valid }, override);
-      });
+      const plan = { remaining, gp, valid, agility: prefs.agility };
+      const matches = allMethods().filter((method) => !prefs.overrides[method.id]?.hidden)
+        .map((method) => evaluateMethod(method, id, settings, marketQuotes, plan, rateOverride(method)));
       const query = normalize(filter.value);
       const ranked = matches.filter((method) => inChannel(method.group) && normalize(method.name).includes(query))
         .sort((a, b) => (a.combined ?? Infinity) - (b.combined ?? Infinity) || b.rate - a.rate);
@@ -387,6 +394,7 @@ export function mountSkilling(root, api) {
         : t('Adjusted time includes the hours needed to earn GP and subtracts the equivalent hours for a profit.',
           'O tempo ajustado inclui as horas necessárias para obter GP e desconta as horas equivalentes ao lucro.'));
       updateFossils?.({ current, remaining, gp, valid, quotes: marketQuotes, methods: matches });
+      if (updatePraygility) updatePraygility(rateOverride(praygility) ?? praygility.rate);
     }
     form.addEventListener('submit', (event) => event.preventDefault());
     form.addEventListener('input', () => {
